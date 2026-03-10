@@ -1075,6 +1075,38 @@ static void test_wire_encoding(void) {
 }
 
 /* ------------------------------------------------------------------ */
+/*  29. BastaResult.sections flag                                      */
+/* ------------------------------------------------------------------ */
+
+static void test_sections_flag(void) {
+    SECTION("BastaResult.sections flag");
+
+    /* Anonymous map — sections must be 0 */
+    BastaResult r1;
+    BastaValue *v1 = basta_parse_cstr("{a: 1}", &r1);
+    CHECK(v1 != NULL);
+    CHECK(r1.code == BASTA_OK);
+    CHECK(r1.sections == 0);
+    basta_free(v1);
+
+    /* Named sections — sections must be 1 */
+    BastaResult r2;
+    BastaValue *v2 = basta_parse_cstr("@app {host: \"localhost\"} @db {port: 5432}", &r2);
+    CHECK(v2 != NULL);
+    CHECK(r2.code == BASTA_OK);
+    CHECK(r2.sections == 1);
+    basta_free(v2);
+
+    /* Anonymous array — sections must be 0 */
+    BastaResult r3;
+    BastaValue *v3 = basta_parse_cstr("[1, 2, 3]", &r3);
+    CHECK(v3 != NULL);
+    CHECK(r3.code == BASTA_OK);
+    CHECK(r3.sections == 0);
+    basta_free(v3);
+}
+
+/* ------------------------------------------------------------------ */
 /*  main                                                               */
 /* ------------------------------------------------------------------ */
 
@@ -1109,6 +1141,7 @@ int main(void) {
     test_error_blob_in_key_position();
     test_compact_pretty_equivalence();
     test_wire_encoding();
+    test_sections_flag();
 
     printf("\n%d passed, %d failed\n", g_passed, g_failed);
     return g_failed ? 1 : 0;

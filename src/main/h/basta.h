@@ -53,6 +53,7 @@ typedef struct {
     BastaError code;
     int        line;
     int        col;
+    int        sections;    /* 1 if the document used @name sections */
     char       message[256];
 } BastaResult;
 

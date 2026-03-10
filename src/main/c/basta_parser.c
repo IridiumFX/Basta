@@ -11,9 +11,10 @@ typedef struct {
 static void parser_init(Parser *p, const char *src, size_t len) {
     lexer_init(&p->lex, src, len);
     p->had_error    = 0;
-    p->result.code  = BASTA_OK;
-    p->result.line  = 0;
-    p->result.col   = 0;
+    p->result.code     = BASTA_OK;
+    p->result.line     = 0;
+    p->result.col      = 0;
+    p->result.sections = 0;
     p->result.message[0] = '\0';
     p->current = lexer_next(&p->lex);
 }
@@ -250,6 +251,7 @@ BASTA_API BastaValue *basta_parse(const char *input, size_t len, BastaResult *re
     parser_init(&p, input, len);
 
     if (check(&p, TOK_AT)) {
+        p.result.sections = 1;
         BastaValue *map = basta_value_map();
         if (!map) { parser_error(&p, "allocation failed"); if (result) *result = p.result; return NULL; }
 
