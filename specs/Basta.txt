@@ -1,0 +1,89 @@
+--------------------------------------
+BASTA: Binary And Simple Text Archive
+--------------------------------------
+
+BNF Grammar
+-----------
+
+Basta is a superset of Pasta.  The grammar is identical to Pasta's except
+that the value production gains one additional alternative: blob.
+
+basta               : blank , containers ;
+containers          : blank , container-seq | blank , section-seq ;
+container-seq       : container , { blank , container } ;
+section-seq         : section , { blank , section } ;
+section             : "@" , label , blank , container ;
+
+container           : map | array ;
+
+map                 : "{" , members , "}" ;
+array               : "[" , elements , "]" ;
+
+members             : blank | member-list ;
+member-list         : member , { blank , "," , blank , member } ;
+member              : blank , label , blank , ":" , blank , element ;
+
+elements            : blank | elements-list ;
+elements-list       : element , { blank , "," , blank , element } ;
+element             : blank , value , blank ;
+
+value               : container | type | void | label-ref | blob ;
+type                : string | boolean | number ;
+void                : "null" ;
+
+(* Blob: binary escape from the text domain.
+   A blob may appear anywhere a value may appear.  It is introduced by
+   the byte 0x00, which is illegal in all other positions in a Basta
+   or Pasta document -- not in labels, not in strings (including
+   multiline strings), not in any token.  The sentinel is followed by
+   exactly 8 bytes encoding the blob length as an unsigned big-endian
+   64-bit integer, then exactly that many bytes of arbitrary binary
+   data (which may itself contain 0x00 bytes freely).  The parser
+   resumes normal Pasta text immediately after the last data byte.
+
+   Because 0x00 is only dispatched when the lexer is in value-start
+   position, a zero byte that appears inside an already-open string
+   scan cannot be mistaken for a blob sentinel: the string scanner
+   runs in a separate mode and never invokes the value dispatch. *)
+blob                : NUL , uint64be , { byte } ;
+NUL                 : 0x00 ;
+uint64be            : byte , byte , byte , byte , byte , byte , byte , byte ;
+                    (* 8 bytes, big-endian unsigned, giving blob length N.
+                       The N data bytes follow immediately. *)
+byte                : (* any byte value 0x00..0xFF *) ;
+
+(* All remaining productions are identical to Pasta. *)
+
+label-ref           : unquoted-label ;
+
+label               : unquoted-label | quoted-label ;
+unquoted-label      : labelchar , { labelchar } ;
+quoted-label        : "\"" , { stringchar } , "\"" ;
+
+string              : simple-string | multiline-string ;
+simple-string       : "\"" , { stringchar } , "\"" ;
+multiline-string    : "\"\"\"" , { anychar-but-triple-quote } , "\"\"\"" ;
+
+boolean             : "true" | "false" ;
+number              : float-constant | signed-integer , [ "." , digits ] ;
+float-constant      : "Inf" | "-Inf" | "NaN" ;
+signed-integer      : [ "-" ] , integer ;
+integer             : "0" | natural , { digit } ;
+digits              : digit , { digit } ;
+
+(* Character classes *)
+
+stringchar          : labelchar | nonalphanumeric ;
+labelchar           : alphabet | digit | labelsymbol ;
+alphabet            : uppercase | lowercase ;
+digit               : "0" | natural ;
+natural             : "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" ;
+labelsymbol         : "!" | "#" | "$" | "%" | "&" | "_" ;
+nonalphanumeric     : "'" | "(" | ")" | "*" | "+" | "," | "-" | "." | "/" | ":"
+                    | ";" | "<" | "=" | ">" | "?" | "@" | "[" | "\" | "]" | "^"
+                    | "`" | "{" | "|" | "}" | "~" ;
+blank               : { nonprint | comment } ;
+comment             : ";" , { anychar-but-newline } ;
+nonprint            : EOL | 0x20 | 0x09 ;
+EOL                 : 0x0A | 0x0D ;
+empty               : ;

@@ -1,0 +1,10 @@
+build/
+cmake-build-*/
+.idea/
+*.exe
+*.dll
+*.so
+*.dylib
+*.o
+*.obj
+CMakeUserPresets.json

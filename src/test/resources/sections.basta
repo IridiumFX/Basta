@@ -1,0 +1,20 @@
+; Named sections — valid Basta, no blobs
+; Blobs appear in the @assets section when built programmatically
+
+@meta {
+  format: "basta",
+  version: "0.1.0",
+  producer: "libbasta"
+}
+
+@manifest [
+  {name: "icon.png",   size: 1024, mime: "image/png"},
+  {name: "shader.spv", size: 4096, mime: "application/octet-stream"},
+  {name: "config.txt", size: 128,  mime: "text/plain"}
+]
+
+@settings {
+  compression: "none",
+  checksum: "sha256",
+  alignment: 4096
+}

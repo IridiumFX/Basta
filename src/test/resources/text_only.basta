@@ -1,0 +1,7 @@
+; Text-only Basta document — identical to Pasta, no blobs
+{
+  name: "libbasta",
+  version: "0.1.0",
+  description: "Binary And Simple Text Archive",
+  stable: false
+}
