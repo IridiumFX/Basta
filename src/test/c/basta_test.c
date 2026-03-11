@@ -1107,6 +1107,54 @@ static void test_sections_flag(void) {
 }
 
 /* ------------------------------------------------------------------ */
+/*  30. Dot in labels                                                  */
+/* ------------------------------------------------------------------ */
+
+static void test_dot_in_labels(void) {
+    SECTION("dot in labels");
+
+    /* Dotted bare key in map */
+    BastaResult r1;
+    BastaValue *v1 = basta_parse_cstr("{server.host: \"localhost\", server.port: 8080}", &r1);
+    CHECK(v1 != NULL);
+    CHECK(r1.code == BASTA_OK);
+    CHECK(basta_count(v1) == 2);
+    CHECK(strcmp(basta_get_string(basta_map_get(v1, "server.host")), "localhost") == 0);
+    CHECK(basta_get_number(basta_map_get(v1, "server.port")) == 8080.0);
+    basta_free(v1);
+
+    /* Dotted label-ref in value position */
+    BastaResult r2;
+    BastaValue *v2 = basta_parse_cstr("{ref: app.config}", &r2);
+    CHECK(v2 != NULL);
+    CHECK(r2.code == BASTA_OK);
+    const BastaValue *ref = basta_map_get(v2, "ref");
+    CHECK(basta_type(ref) == BASTA_LABEL);
+    CHECK(strcmp(basta_get_label(ref), "app.config") == 0);
+    basta_free(v2);
+
+    /* Writer emits dotted keys bare (not quoted) */
+    BastaValue *v3 = basta_new_map();
+    basta_set(v3, "db.host", basta_new_string("pg.local"));
+    size_t doc_len;
+    char *buf = basta_write(v3, BASTA_COMPACT, &doc_len);
+    CHECK(buf != NULL);
+    /* Should contain db.host without quotes, not "db.host" */
+    CHECK(strstr(buf, "db.host:") != NULL || strstr(buf, "db.host :") != NULL);
+    CHECK(strstr(buf, "\"db.host\"") == NULL);
+    free(buf);
+    basta_free(v3);
+
+    /* Number with dot still works — no ambiguity */
+    BastaResult r4;
+    BastaValue *v4 = basta_parse_cstr("{pi: 3.14}", &r4);
+    CHECK(v4 != NULL);
+    CHECK(r4.code == BASTA_OK);
+    CHECK(basta_get_number(basta_map_get(v4, "pi")) == 3.14);
+    basta_free(v4);
+}
+
+/* ------------------------------------------------------------------ */
 /*  main                                                               */
 /* ------------------------------------------------------------------ */
 
@@ -1142,6 +1190,7 @@ int main(void) {
     test_compact_pretty_equivalence();
     test_wire_encoding();
     test_sections_flag();
+    test_dot_in_labels();
 
     printf("\n%d passed, %d failed\n", g_passed, g_failed);
     return g_failed ? 1 : 0;

@@ -68,7 +68,7 @@ static int buf_indent(Buf *b, int depth) {
 
 static int is_label_symbol(char c) {
     return c == '!' || c == '#' || c == '$' || c == '%'
-        || c == '&' || c == '_';
+        || c == '&' || c == '.' || c == '_';
 }
 
 static int is_label_char(char c) {

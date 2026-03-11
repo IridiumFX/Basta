@@ -78,8 +78,8 @@ labelchar           : alphabet | digit | labelsymbol ;
 alphabet            : uppercase | lowercase ;
 digit               : "0" | natural ;
 natural             : "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" ;
-labelsymbol         : "!" | "#" | "$" | "%" | "&" | "_" ;
-nonalphanumeric     : "'" | "(" | ")" | "*" | "+" | "," | "-" | "." | "/" | ":"
+labelsymbol         : "!" | "#" | "$" | "%" | "&" | "." | "_" ;
+nonalphanumeric     : "'" | "(" | ")" | "*" | "+" | "," | "-" | "/" | ":"
                     | ";" | "<" | "=" | ">" | "?" | "@" | "[" | "\" | "]" | "^"
                     | "`" | "{" | "|" | "}" | "~" ;
 blank               : { nonprint | comment } ;
