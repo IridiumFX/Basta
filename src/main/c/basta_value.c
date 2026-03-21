@@ -49,7 +49,7 @@ BastaValue *basta_value_blob(const uint8_t *data, size_t len) {
     if (!v) return NULL;
     v->as.blob.data = (uint8_t *)malloc(len ? len : 1);
     if (!v->as.blob.data) { free(v); return NULL; }
-    memcpy(v->as.blob.data, data, len);
+    if (data && len) memcpy(v->as.blob.data, data, len);
     v->as.blob.len = len;
     return v;
 }
