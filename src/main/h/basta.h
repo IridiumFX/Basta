@@ -35,6 +35,11 @@ typedef enum {
     BASTA_BLOB      /* raw binary blob */
 } BastaType;
 
+/* Number format hints (for roundtrip fidelity) */
+#define BASTA_NUM_DEC  0   /* decimal (default) */
+#define BASTA_NUM_HEX  1   /* 0x prefix */
+#define BASTA_NUM_BIN  2   /* 0b prefix */
+
 /* Opaque value handle */
 typedef struct BastaValue BastaValue;
 
@@ -80,6 +85,7 @@ BASTA_API int          basta_is_null(const BastaValue *v);
 /* Scalars */
 BASTA_API int          basta_get_bool(const BastaValue *v);
 BASTA_API double       basta_get_number(const BastaValue *v);
+BASTA_API int          basta_get_number_fmt(const BastaValue *v);
 BASTA_API const char  *basta_get_string(const BastaValue *v);
 BASTA_API size_t       basta_get_string_len(const BastaValue *v);
 BASTA_API const char  *basta_get_label(const BastaValue *v);
@@ -102,6 +108,7 @@ BASTA_API const BastaValue  *basta_map_value(const BastaValue *v, size_t index);
 BASTA_API BastaValue *basta_new_null(void);
 BASTA_API BastaValue *basta_new_bool(int b);
 BASTA_API BastaValue *basta_new_number(double n);
+BASTA_API BastaValue *basta_new_number_fmt(double n, int fmt);
 BASTA_API BastaValue *basta_new_string(const char *s);
 BASTA_API BastaValue *basta_new_string_len(const char *s, size_t len);
 BASTA_API BastaValue *basta_new_label(const char *s);

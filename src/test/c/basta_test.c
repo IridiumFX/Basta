@@ -1155,6 +1155,88 @@ static void test_dot_in_labels(void) {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Hex and binary number literals                                     */
+/* ------------------------------------------------------------------ */
+
+static void test_hex_numbers(void) {
+    SECTION("hex number literals");
+
+    BastaResult r;
+    BastaValue *v = basta_parse_cstr("0xff", &r);
+    CHECK(r.code == BASTA_OK);
+    CHECK(basta_get_number(v) == 255.0);
+    CHECK(basta_get_number_fmt(v) == BASTA_NUM_HEX);
+    char *s = basta_write(v, BASTA_COMPACT, NULL);
+    CHECK(s && strcmp(s, "0xff") == 0);
+    free(s);
+    basta_free(v);
+
+    /* Negative hex */
+    v = basta_parse_cstr("-0x10", &r);
+    CHECK(basta_get_number(v) == -16.0);
+    s = basta_write(v, BASTA_COMPACT, NULL);
+    CHECK(s && strcmp(s, "-0x10") == 0);
+    free(s);
+    basta_free(v);
+
+    /* Large hex */
+    v = basta_parse_cstr("0xDEADBEEF", &r);
+    CHECK(basta_get_number(v) == 3735928559.0);
+    s = basta_write(v, BASTA_COMPACT, NULL);
+    CHECK(s && strcmp(s, "0xdeadbeef") == 0);
+    free(s);
+    basta_free(v);
+}
+
+static void test_binary_numbers(void) {
+    SECTION("binary number literals");
+
+    BastaResult r;
+    BastaValue *v = basta_parse_cstr("0b1010", &r);
+    CHECK(r.code == BASTA_OK);
+    CHECK(basta_get_number(v) == 10.0);
+    CHECK(basta_get_number_fmt(v) == BASTA_NUM_BIN);
+    char *s = basta_write(v, BASTA_COMPACT, NULL);
+    CHECK(s && strcmp(s, "0b1010") == 0);
+    free(s);
+    basta_free(v);
+
+    /* Negative binary */
+    v = basta_parse_cstr("-0b11", &r);
+    CHECK(basta_get_number(v) == -3.0);
+    s = basta_write(v, BASTA_COMPACT, NULL);
+    CHECK(s && strcmp(s, "-0b11") == 0);
+    free(s);
+    basta_free(v);
+}
+
+static void test_hex_bin_builder(void) {
+    SECTION("hex/bin builder API and backward compat");
+
+    /* Builder with format */
+    BastaValue *v = basta_new_number_fmt(255, BASTA_NUM_HEX);
+    CHECK(basta_get_number(v) == 255.0);
+    CHECK(basta_get_number_fmt(v) == BASTA_NUM_HEX);
+    char *s = basta_write(v, BASTA_COMPACT, NULL);
+    CHECK(s && strcmp(s, "0xff") == 0);
+    free(s);
+    basta_free(v);
+
+    /* Plain builder stays decimal */
+    v = basta_new_number(255);
+    CHECK(basta_get_number_fmt(v) == BASTA_NUM_DEC);
+    s = basta_write(v, BASTA_COMPACT, NULL);
+    CHECK(s && strcmp(s, "255") == 0);
+    free(s);
+    basta_free(v);
+
+    /* Non-number query returns 0 */
+    v = basta_new_string("hello");
+    CHECK(basta_get_number_fmt(v) == 0);
+    basta_free(v);
+}
+
+/* ------------------------------------------------------------------ */
 /*  main                                                               */
 /* ------------------------------------------------------------------ */
 
@@ -1191,6 +1273,9 @@ int main(void) {
     test_wire_encoding();
     test_sections_flag();
     test_dot_in_labels();
+    test_hex_numbers();
+    test_binary_numbers();
+    test_hex_bin_builder();
 
     printf("\n%d passed, %d failed\n", g_passed, g_failed);
     return g_failed ? 1 : 0;

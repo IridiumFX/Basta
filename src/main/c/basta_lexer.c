@@ -184,12 +184,31 @@ static Token lex_number(Lexer *lex) {
 
     if (lex_peek(lex) == '-') lex_advance(lex);
 
-    while (!lex_eof(lex) && isdigit(lex_peek(lex)))
+    /* 0x hex or 0b binary prefix */
+    if (lex_peek(lex) == '0' && lex->pos + 1 < lex->src_len) {
+        char p = lex->src[lex->pos + 1];
+        if (p == 'x' || p == 'X') {
+            lex_advance(lex); lex_advance(lex); /* consume 0x */
+            while (!lex_eof(lex) && isxdigit((unsigned char)lex_peek(lex)))
+                lex_advance(lex);
+            size_t len = (size_t)(lex->src + lex->pos - start);
+            return make_token(TOK_NUMBER, start, len, start_line, start_col);
+        }
+        if (p == 'b' || p == 'B') {
+            lex_advance(lex); lex_advance(lex); /* consume 0b */
+            while (!lex_eof(lex) && (lex_peek(lex) == '0' || lex_peek(lex) == '1'))
+                lex_advance(lex);
+            size_t len = (size_t)(lex->src + lex->pos - start);
+            return make_token(TOK_NUMBER, start, len, start_line, start_col);
+        }
+    }
+
+    while (!lex_eof(lex) && isdigit((unsigned char)lex_peek(lex)))
         lex_advance(lex);
 
     if (!lex_eof(lex) && lex_peek(lex) == '.') {
         lex_advance(lex);
-        while (!lex_eof(lex) && isdigit(lex_peek(lex)))
+        while (!lex_eof(lex) && isdigit((unsigned char)lex_peek(lex)))
             lex_advance(lex);
     }
 

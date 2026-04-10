@@ -127,11 +127,44 @@ static int write_string(Buf *b, const char *s, size_t len) {
 /*  Number formatting                                                  */
 /* ------------------------------------------------------------------ */
 
-static int write_number(Buf *b, double n) {
+static int write_number(Buf *b, double n, uint8_t fmt) {
     char tmp[64];
     if (isnan(n))  return buf_puts(b, "NaN");
     if (isinf(n))  return buf_puts(b, n < 0 ? "-Inf" : "Inf");
-    if (n == (long long)n && n >= -1e15 && n <= 1e15)
+
+    int is_int = (n == (long long)n && n >= -1e15 && n <= 1e15);
+
+    if (fmt == BASTA_NUM_HEX && is_int) {
+        long long iv = (long long)n;
+        if (iv < 0)
+            snprintf(tmp, sizeof(tmp), "-0x%llx", (unsigned long long)(-iv));
+        else
+            snprintf(tmp, sizeof(tmp), "0x%llx", (unsigned long long)iv);
+        return buf_puts(b, tmp);
+    }
+
+    if (fmt == BASTA_NUM_BIN && is_int) {
+        long long iv = (long long)n;
+        unsigned long long uv = iv < 0 ? (unsigned long long)(-iv)
+                                       : (unsigned long long)iv;
+        char bin[68];
+        int pos = (int)sizeof(bin) - 1;
+        bin[pos] = '\0';
+        if (uv == 0) {
+            bin[--pos] = '0';
+        } else {
+            while (uv > 0) {
+                bin[--pos] = '0' + (char)(uv & 1);
+                uv >>= 1;
+            }
+        }
+        bin[--pos] = 'b';
+        bin[--pos] = '0';
+        if (iv < 0) bin[--pos] = '-';
+        return buf_puts(b, bin + pos);
+    }
+
+    if (is_int)
         snprintf(tmp, sizeof(tmp), "%lld", (long long)n);
     else
         snprintf(tmp, sizeof(tmp), "%.17g", n);
@@ -241,7 +274,7 @@ static int write_value(Buf *b, const BastaValue *v, int compact, int sorted, int
     switch (v->type) {
     case BASTA_NULL:   return buf_puts(b, "null");
     case BASTA_BOOL:   return buf_puts(b, v->as.boolean ? "true" : "false");
-    case BASTA_NUMBER: return write_number(b, v->as.number);
+    case BASTA_NUMBER: return write_number(b, v->as.number, v->num_fmt);
     case BASTA_STRING: return write_string(b, v->as.string.data, v->as.string.len);
     case BASTA_LABEL:  return buf_append(b, v->as.string.data, v->as.string.len);
     case BASTA_ARRAY:  return write_array(b, v, compact, sorted, depth);

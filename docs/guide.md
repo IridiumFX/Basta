@@ -25,8 +25,9 @@ the `BASTA_BLOB` value type and its binary wire encoding.
 ### 1.1 Relation to Pasta
 
 Basta is Pasta with one extra value type. All of Pasta's syntax — maps,
-arrays, strings, numbers, booleans, null, label values, named sections,
-multiline strings, comments — is unchanged and valid in Basta.
+arrays, strings, numbers (including hex `0x` and binary `0b` literals),
+booleans, null, label values, named sections, multiline strings,
+comments — is unchanged and valid in Basta.
 
 The only new concept is the blob.
 
@@ -405,7 +406,7 @@ if (fp) {
 A Basta document roundtrips correctly through parse → write → parse.
 Blob data is preserved byte-for-byte. Text content behaves identically to
 Pasta: comments are stripped, whitespace is normalized, key order is
-preserved, and strings are verbatim.
+preserved, strings are verbatim, and hex/binary number formats are retained.
 
 ---
 
@@ -413,7 +414,12 @@ preserved, and strings are verbatim.
 
 ### 5.1 Constructors
 
-All Pasta constructors exist with `basta_` prefix. The blob constructor is:
+All Pasta constructors exist with `basta_` prefix, including
+`basta_new_number_fmt(double n, int fmt)` for creating hex/binary-tagged
+numbers (`BASTA_NUM_HEX`, `BASTA_NUM_BIN`). Query the format with
+`basta_get_number_fmt()`. See the Pasta guide for details.
+
+The blob constructor is:
 
 ```c
 BastaValue *basta_new_blob(const uint8_t *data, size_t len);
@@ -548,6 +554,7 @@ truncation — only due to allocation failure.
 ```c
 struct BastaValue {
     BastaType type;
+    uint8_t   num_fmt;   /* BASTA_NUM_DEC / _HEX / _BIN */
     union {
         int     boolean;
         double  number;

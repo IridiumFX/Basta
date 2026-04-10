@@ -65,11 +65,17 @@ simple-string       : "\"" , { stringchar } , "\"" ;
 multiline-string    : "\"\"\"" , { anychar-but-triple-quote } , "\"\"\"" ;
 
 boolean             : "true" | "false" ;
-number              : float-constant | signed-integer , [ "." , digits ] ;
+number              : float-constant | hex-number | bin-number
+                    | signed-integer , [ "." , digits ] ;
 float-constant      : "Inf" | "-Inf" | "NaN" ;
+hex-number          : [ "-" ] , "0" , ( "x" | "X" ) , hexdigit , { hexdigit } ;
+bin-number          : [ "-" ] , "0" , ( "b" | "B" ) , bindigit , { bindigit } ;
 signed-integer      : [ "-" ] , integer ;
 integer             : "0" | natural , { digit } ;
 digits              : digit , { digit } ;
+hexdigit            : digit | "a" | "b" | "c" | "d" | "e" | "f"
+                    | "A" | "B" | "C" | "D" | "E" | "F" ;
+bindigit            : "0" | "1" ;
 
 (* Character classes *)
 

@@ -15,6 +15,7 @@ typedef struct BastaMember {
 
 struct BastaValue {
     BastaType type;
+    uint8_t   num_fmt;   /* BASTA_NUM_DEC / _HEX / _BIN (0 for non-numbers) */
     union {
         int     boolean;
         double  number;
@@ -30,6 +31,7 @@ struct BastaValue {
 BastaValue *basta_value_null(void);
 BastaValue *basta_value_bool(int b);
 BastaValue *basta_value_number(double n);
+BastaValue *basta_value_number_fmt(double n, uint8_t fmt);
 BastaValue *basta_value_string(const char *s, size_t len);
 BastaValue *basta_value_label(const char *s, size_t len);
 BastaValue *basta_value_blob(const uint8_t *data, size_t len);

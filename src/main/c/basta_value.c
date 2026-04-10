@@ -22,6 +22,12 @@ BastaValue *basta_value_number(double n) {
     return v;
 }
 
+BastaValue *basta_value_number_fmt(double n, uint8_t fmt) {
+    BastaValue *v = alloc_value(BASTA_NUMBER);
+    if (v) { v->as.number = n; v->num_fmt = fmt; }
+    return v;
+}
+
 BastaValue *basta_value_string(const char *s, size_t len) {
     BastaValue *v = alloc_value(BASTA_STRING);
     if (!v) return NULL;
@@ -107,6 +113,9 @@ int basta_map_put(BastaValue *map, const char *key, size_t key_len, BastaValue *
 BASTA_API BastaValue *basta_new_null(void) { return basta_value_null(); }
 BASTA_API BastaValue *basta_new_bool(int b) { return basta_value_bool(b); }
 BASTA_API BastaValue *basta_new_number(double n) { return basta_value_number(n); }
+BASTA_API BastaValue *basta_new_number_fmt(double n, int fmt) {
+    return basta_value_number_fmt(n, (uint8_t)fmt);
+}
 BASTA_API BastaValue *basta_new_string(const char *s) {
     return basta_value_string(s, s ? strlen(s) : 0);
 }
@@ -186,6 +195,10 @@ BASTA_API int basta_get_bool(const BastaValue *v) {
 
 BASTA_API double basta_get_number(const BastaValue *v) {
     return (v && v->type == BASTA_NUMBER) ? v->as.number : 0.0;
+}
+
+BASTA_API int basta_get_number_fmt(const BastaValue *v) {
+    return (v && v->type == BASTA_NUMBER) ? (int)v->num_fmt : 0;
 }
 
 BASTA_API const char *basta_get_string(const BastaValue *v) {
