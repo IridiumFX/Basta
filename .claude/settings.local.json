@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Program Files/JetBrains/CLion 2025.3.3/bin/cmake/**)",
+      "Read(//c/Program Files/JetBrains/CLion 2025.3.3/bin/**)",
+      "Bash(export PATH=\"/c/Program Files/JetBrains/CLion 2025.3.3/bin/cmake/win/x64/bin:/c/Program Files/JetBrains/CLion 2025.3.3/bin/ninja/win/x64:$PATH\" && cmake --preset debug 2>&1)",
+      "Bash(which gcc:*)",
+      "Bash(ls \"/c/Program Files/JetBrains/CLion 2025.3.3/bin/mingw/bin/gcc.exe\" 2>/dev/null && \"/c/Program Files/JetBrains/CLion 2025.3.3/bin/mingw/bin/gcc.exe\" --version | head -1)",
+      "Bash(export PATH=\"/c/Program Files/JetBrains/CLion 2025.3.3/bin/cmake/win/x64/bin:/c/Program Files/JetBrains/CLion 2025.3.3/bin/ninja/win/x64:/c/Program Files/JetBrains/CLion 2025.3.3/bin/mingw/bin:$PATH\" && cmake --preset debug -DCMAKE_C_COMPILER=gcc 2>&1)",
+      "Bash(export PATH=\"/c/Program Files/JetBrains/CLion 2025.3.3/bin/cmake/win/x64/bin:/c/Program Files/JetBrains/CLion 2025.3.3/bin/ninja/win/x64:/c/Program Files/JetBrains/CLion 2025.3.3/bin/mingw/bin:$PATH\" && rm -rf build/debug && cmake --preset debug -DCMAKE_C_COMPILER=gcc 2>&1)",
+      "Bash(export PATH=\"/c/Program Files/JetBrains/CLion 2025.3.3/bin/cmake/win/x64/bin:/c/Program Files/JetBrains/CLion 2025.3.3/bin/ninja/win/x64:/c/Program Files/JetBrains/CLion 2025.3.3/bin/mingw/bin:$PATH\" && cmake --build build/debug 2>&1)",
+      "Bash(export PATH=\"/c/Program Files/JetBrains/CLion 2025.3.3/bin/cmake/win/x64/bin:/c/Program Files/JetBrains/CLion 2025.3.3/bin/ninja/win/x64:/c/Program Files/JetBrains/CLion 2025.3.3/bin/mingw/bin:$PATH\" && cd build/debug && ctest --output-on-failure 2>&1)",
+      "Bash(export PATH=\"/c/Program Files/JetBrains/CLion 2025.3.3/bin/cmake/win/x64/bin:/c/Program Files/JetBrains/CLion 2025.3.3/bin/ninja/win/x64:/c/Program Files/JetBrains/CLion 2025.3.3/bin/mingw/bin:$PATH\" && rm -rf build/debug && cmake --preset debug -DCMAKE_C_COMPILER=gcc 2>&1 && cmake --build build/debug 2>&1)",
+      "Bash(export PATH=\"/c/Program Files/JetBrains/CLion 2025.3.3/bin/cmake/win/x64/bin:/c/Program Files/JetBrains/CLion 2025.3.3/bin/ninja/win/x64:/c/Program Files/JetBrains/CLion 2025.3.3/bin/mingw/bin:$PATH\" && cd /c/Users/Iridium/projects/Basta && cmake --preset debug -DCMAKE_C_COMPILER=gcc 2>&1 && cmake --build build/debug 2>&1)",
+      "Bash(export PATH=\"/c/Program Files/JetBrains/CLion 2025.3.3/bin/cmake/win/x64/bin:/c/Program Files/JetBrains/CLion 2025.3.3/bin/ninja/win/x64:/c/Program Files/JetBrains/CLion 2025.3.3/bin/mingw/bin:$PATH\" && cd /c/Users/Iridium/projects/Basta/build/debug && ctest --output-on-failure 2>&1)",
+      "Bash(export PATH=\"/c/Program Files/JetBrains/CLion 2025.3.3/bin/cmake/win/x64/bin:/c/Program Files/JetBrains/CLion 2025.3.3/bin/ninja/win/x64:/c/Program Files/JetBrains/CLion 2025.3.3/bin/mingw/bin:$PATH\" && cmake --build build/debug 2>&1 && cd build/debug && ctest --output-on-failure 2>&1)",
+      "Bash(git add:*)"
+    ]
+  }
+}

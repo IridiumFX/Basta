@@ -1,7 +1,7 @@
 #include "basta_internal.h"
 #include <ctype.h>
 
-void lexer_init(Lexer *lex, const char *src, size_t len) {
+void basta_lexer_init(Lexer *lex, const char *src, size_t len) {
     lex->src     = src;
     lex->src_len = len;
     lex->pos     = 0;
@@ -42,7 +42,7 @@ static void skip_blank(Lexer *lex) {
         }
     }
     /* 0x00 is not blank; it will be handled as a blob sentinel in
-       lexer_next once skip_blank returns. */
+       basta_lexer_next once skip_blank returns. */
 }
 
 static int is_label_symbol(unsigned char c) {
@@ -243,7 +243,7 @@ static Token lex_label_or_keyword(Lexer *lex) {
 /*  Main dispatch                                                      */
 /* ------------------------------------------------------------------ */
 
-Token lexer_next(Lexer *lex) {
+Token basta_lexer_next(Lexer *lex) {
     skip_blank(lex);
 
     if (lex_eof(lex))

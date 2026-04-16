@@ -79,7 +79,7 @@ typedef struct {
     int         col;
 } Lexer;
 
-void  lexer_init(Lexer *lex, const char *src, size_t len);
-Token lexer_next(Lexer *lex);
+void  basta_lexer_init(Lexer *lex, const char *src, size_t len);
+Token basta_lexer_next(Lexer *lex);
 
 #endif /* BASTA_INTERNAL_H */

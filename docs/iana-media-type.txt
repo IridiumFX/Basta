@@ -1,0 +1,85 @@
+IANA Media Type Registration: application/vnd.basta
+====================================================
+
+Type name:              application
+
+Subtype name:           vnd.basta
+
+Required parameters:    None
+
+Optional parameters:    None
+
+Encoding considerations:
+  Binary.  Basta documents may contain embedded binary blob values encoded
+  as: a 0x00 sentinel byte, followed by an 8-byte big-endian unsigned
+  integer length, followed by that many bytes of arbitrary binary payload.
+  The text portions of a Basta document use the same syntax as Pasta
+  (ASCII-range tokens, UTF-8 strings).  Because blobs may contain any byte
+  value, the overall document is binary.
+
+Security considerations:
+  Basta is a data-only format.  It contains no executable code, no external
+  references that are resolved during parsing, and no macro or include
+  directives.  A conforming parser produces an in-memory value tree and
+  nothing else.
+
+  Blob values carry arbitrary binary payloads.  Applications that extract
+  blobs must validate or sandbox the resulting data according to their own
+  security requirements.  The Basta parser itself treats blob payloads as
+  opaque byte sequences.
+
+  Label values (unquoted identifiers in value position) are inert data
+  within Basta itself.  Higher-level systems that interpret labels as
+  cross-section references must validate those references within their own
+  security model.
+
+  As with any structured data format, implementations should guard against
+  resource exhaustion from deeply nested containers, extremely large input
+  documents, or blobs declaring very large sizes.
+
+Interoperability considerations:
+  Basta is a strict superset of the Pasta format (media type
+  text/vnd.pasta).  The grammar is identical to Pasta's except that the
+  value production gains one additional alternative: blob.
+
+  Any Pasta document is a valid Basta document.  Any Basta document that
+  contains no blob values is a valid Pasta document and can be processed
+  by a Pasta parser.
+
+  The blob sentinel byte (0x00) is illegal in all other positions in both
+  Pasta and Basta documents, ensuring unambiguous detection.
+
+  Implementations must use explicit byte-length I/O (not null-terminated
+  string functions) when reading or writing Basta documents that may
+  contain blobs.
+
+Published specification:
+  The Basta BNF grammar is maintained at:
+  https://github.com/nicholasgasior/basta (specs/Basta.txt)
+
+Applications which use this media type:
+  Data serialization and structured data interchange in systems that need
+  to embed binary payloads (images, compiled shaders, certificates,
+  compressed data) alongside human-readable configuration.  Asset packaging
+  and binary archive formats.
+
+Fragment identifier considerations:  N/A
+
+Restrictions on usage:  None
+
+Additional information:
+  Deprecated alias names for this type:   None
+  Magic number(s):      None (may start with '{', '[', '@', 0x00,
+                        or whitespace/comments)
+  File extension(s):    .basta
+  Macintosh file type code:  None
+  Object Identifiers:   None
+
+Person to contact for further information:
+  Name:    Nicholas Gasior
+  Email:   nicholasgasior@gmail.com
+
+Intended usage:         COMMON
+
+Author:                 Nicholas Gasior
+Change controller:      Nicholas Gasior

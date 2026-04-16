@@ -9,14 +9,14 @@ typedef struct {
 } Parser;
 
 static void parser_init(Parser *p, const char *src, size_t len) {
-    lexer_init(&p->lex, src, len);
+    basta_lexer_init(&p->lex, src, len);
     p->had_error    = 0;
     p->result.code     = BASTA_OK;
     p->result.line     = 0;
     p->result.col      = 0;
     p->result.sections = 0;
     p->result.message[0] = '\0';
-    p->current = lexer_next(&p->lex);
+    p->current = basta_lexer_next(&p->lex);
 }
 
 static void parser_error_code(Parser *p, BastaError code, const char *msg) {
@@ -33,7 +33,7 @@ static void parser_error(Parser *p, const char *msg) {
 }
 
 static void advance(Parser *p) {
-    p->current = lexer_next(&p->lex);
+    p->current = basta_lexer_next(&p->lex);
     if (p->current.type == TOK_ERROR) {
         /* propagate lexer errors: truncated blob becomes BASTA_ERR_BLOB_TRUNCATED */
         const char *msg = p->current.start;
