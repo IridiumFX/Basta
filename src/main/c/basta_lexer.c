@@ -28,15 +28,37 @@ static unsigned char lex_advance(Lexer *lex) {
     return c;
 }
 
+/* Forward declaration — definition is below alongside other helpers. */
+static size_t lex_remaining(const Lexer *lex);
+
 static void skip_blank(Lexer *lex) {
     while (!lex_eof(lex)) {
         unsigned char c = lex_peek(lex);
         if (c == ' ' || c == '\t' || c == '\r' || c == '\n') {
             lex_advance(lex);
         } else if (c == ';') {
-            /* comment: skip to end of line */
+            /* line comment: skip to end of line */
             while (!lex_eof(lex) && lex_peek(lex) != '\n')
                 lex_advance(lex);
+        } else if (c == '/' && lex_remaining(lex) >= 2 &&
+                   lex->src[lex->pos + 1] == '/') {
+            /* C99 line comment: skip to end of line */
+            while (!lex_eof(lex) && lex_peek(lex) != '\n')
+                lex_advance(lex);
+        } else if (c == '/' && lex_remaining(lex) >= 2 &&
+                   lex->src[lex->pos + 1] == '*') {
+            /* C block comment: skip until close-delimiter */
+            lex_advance(lex); /* consume / */
+            lex_advance(lex); /* consume * */
+            while (!lex_eof(lex)) {
+                if (lex_peek(lex) == '*' && lex_remaining(lex) >= 2 &&
+                    lex->src[lex->pos + 1] == '/') {
+                    lex_advance(lex); /* consume * */
+                    lex_advance(lex); /* consume / */
+                    break;
+                }
+                lex_advance(lex);
+            }
         } else {
             break;
         }
