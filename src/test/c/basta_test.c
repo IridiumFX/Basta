@@ -1240,6 +1240,198 @@ static void test_hex_bin_builder(void) {
 /*  main                                                               */
 /* ------------------------------------------------------------------ */
 
+/* ------------------------------------------------------------------ */
+/*  Atom labels (grammar alignment)                                    */
+/*                                                                     */
+/*  Map keys, section names and value-position label-refs are `label`  */
+/*  in the grammar, and unquoted-label is a maximal run of labelchars  */
+/*  (digits included).  So a label may be spelled like a number or a   */
+/*  keyword.  Value position keeps keyword/number precedence.          */
+/* ------------------------------------------------------------------ */
+
+static void test_atom_labels(void) {
+    SECTION("atom labels (grammar alignment)");
+    BastaResult r;
+    BastaValue *v;
+
+    /* Digit-led non-numeric runs are labels (maximal munch), in value pos */
+    v = basta_parse_cstr("[123abc, 12ab, 1_000, 0x1fg, 12.3.4]", &r);
+    CHECK(v != NULL && r.code == BASTA_OK);
+    CHECK(basta_count(v) == 5);
+    CHECK(basta_type(basta_array_get(v, 0)) == BASTA_LABEL);
+    CHECK(strcmp(basta_get_label(basta_array_get(v, 0)), "123abc") == 0);
+    CHECK(strcmp(basta_get_label(basta_array_get(v, 2)), "1_000") == 0);
+    CHECK(strcmp(basta_get_label(basta_array_get(v, 3)), "0x1fg") == 0);
+    CHECK(strcmp(basta_get_label(basta_array_get(v, 4)), "12.3.4") == 0);
+    basta_free(v);
+
+    /* ...and as map keys */
+    v = basta_parse_cstr("{123abc: 7}", &r);
+    CHECK(v != NULL && basta_get_number(basta_map_get(v, "123abc")) == 7.0);
+    basta_free(v);
+
+    /* Number- and keyword-spelled keys (the true:false / 0:1 cases) */
+    v = basta_parse_cstr("{0: 1, 123: 2, true: 3, false: 4, null: 5, 3.14: 6, 0x1f: 7}", &r);
+    CHECK(v != NULL && basta_count(v) == 7);
+    CHECK(basta_get_number(basta_map_get(v, "0")) == 1.0);
+    CHECK(basta_get_number(basta_map_get(v, "123")) == 2.0);
+    CHECK(basta_get_number(basta_map_get(v, "true")) == 3.0);
+    CHECK(basta_get_number(basta_map_get(v, "false")) == 4.0);
+    CHECK(basta_get_number(basta_map_get(v, "null")) == 5.0);
+    CHECK(basta_get_number(basta_map_get(v, "3.14")) == 6.0);
+    CHECK(basta_get_number(basta_map_get(v, "0x1f")) == 7.0);
+    basta_free(v);
+
+    /* A key literally `true` mapping to the boolean `false` */
+    v = basta_parse_cstr("{true: false}", &r);
+    CHECK(v != NULL);
+    CHECK(basta_type(basta_map_get(v, "true")) == BASTA_BOOL);
+    CHECK(basta_get_bool(basta_map_get(v, "true")) == 0);
+    basta_free(v);
+
+    /* '-' is not a labelchar: signed spellings are NOT valid keys */
+    v = basta_parse_cstr("{-5: 1}", &r);
+    CHECK(v == NULL && r.code != BASTA_OK);
+    v = basta_parse_cstr("{-Inf: 1}", &r);
+    CHECK(v == NULL && r.code != BASTA_OK);
+
+    /* Value-position precedence preserved (keyword/number win over label-ref) */
+    v = basta_parse_cstr("[true, 0, 42, foo]", &r);
+    CHECK(v != NULL && basta_count(v) == 4);
+    CHECK(basta_type(basta_array_get(v, 0)) == BASTA_BOOL);
+    CHECK(basta_type(basta_array_get(v, 1)) == BASTA_NUMBER);
+    CHECK(basta_type(basta_array_get(v, 3)) == BASTA_LABEL);
+    basta_free(v);
+
+    /* Section names are `label` too, so @0 / @true are valid */
+    v = basta_parse_cstr("@0 { host: 1 } @true { on: 1 }", &r);
+    CHECK(v != NULL && basta_count(v) == 2);
+    CHECK(basta_type(basta_map_get(v, "0")) == BASTA_MAP);
+    CHECK(basta_type(basta_map_get(v, "true")) == BASTA_MAP);
+    basta_free(v);
+
+    /* Roundtrip is now a fixed point for keys spelled as numbers */
+    {
+        BastaValue *a = basta_parse_cstr("{\"0\": 1, 123abc: 2, 3.14: 3}", &r);
+        CHECK(a != NULL);
+        size_t n;
+        char *s = basta_write(a, BASTA_COMPACT, &n);
+        CHECK(s != NULL);
+        BastaValue *b = basta_parse(s, n, &r);
+        CHECK(b != NULL && r.code == BASTA_OK);
+        CHECK(b && basta_get_number(basta_map_get(b, "0")) == 1.0);
+        CHECK(b && basta_get_number(basta_map_get(b, "123abc")) == 2.0);
+        CHECK(b && basta_get_number(basta_map_get(b, "3.14")) == 3.0);
+        free(s); basta_free(a); basta_free(b);
+    }
+}
+
+/* Boundary cases where a lexeme could be read as either a number/keyword or a
+   label — the exact edges maximal munch and value-position precedence must get
+   right.  Mirrors specs/conformance/atom-labels.cases. */
+static void test_atom_labels_edges(void) {
+    SECTION("atom labels — number/keyword boundaries");
+    BastaResult r;
+    BastaValue *v;
+
+    v = basta_parse_cstr("[0b1010, 0b12, 0xdeadbeef, 0xdeadbeefg, 5e3, 3d, 9__, 1.2.3, 0X1F, .5]", &r);
+    CHECK(v != NULL && basta_count(v) == 10);
+    CHECK(v && basta_type(basta_array_get(v, 0)) == BASTA_NUMBER);   /* 0b1010 */
+    CHECK(v && basta_type(basta_array_get(v, 1)) == BASTA_LABEL);    /* 0b12   */
+    CHECK(v && strcmp(basta_get_label(basta_array_get(v, 1)), "0b12") == 0);
+    CHECK(v && basta_type(basta_array_get(v, 2)) == BASTA_NUMBER);   /* 0xdeadbeef  */
+    CHECK(v && basta_type(basta_array_get(v, 3)) == BASTA_LABEL);    /* 0xdeadbeefg */
+    CHECK(v && basta_type(basta_array_get(v, 4)) == BASTA_LABEL);    /* 5e3    */
+    CHECK(v && basta_type(basta_array_get(v, 5)) == BASTA_LABEL);    /* 3d     */
+    CHECK(v && basta_type(basta_array_get(v, 6)) == BASTA_LABEL);    /* 9__    */
+    CHECK(v && basta_type(basta_array_get(v, 7)) == BASTA_LABEL);    /* 1.2.3  */
+    CHECK(v && basta_type(basta_array_get(v, 8)) == BASTA_NUMBER);   /* 0X1F   */
+    CHECK(v && basta_type(basta_array_get(v, 9)) == BASTA_LABEL);    /* .5     */
+    basta_free(v);
+
+    v = basta_parse_cstr("[true, truer, Inf, Infi, NaN, NaNa, null, nullable, true.]", &r);
+    CHECK(v != NULL && basta_count(v) == 9);
+    CHECK(v && basta_type(basta_array_get(v, 0)) == BASTA_BOOL);     /* true     */
+    CHECK(v && basta_type(basta_array_get(v, 1)) == BASTA_LABEL);    /* truer    */
+    CHECK(v && basta_type(basta_array_get(v, 2)) == BASTA_NUMBER);   /* Inf      */
+    CHECK(v && basta_type(basta_array_get(v, 3)) == BASTA_LABEL);    /* Infi     */
+    CHECK(v && basta_type(basta_array_get(v, 4)) == BASTA_NUMBER);   /* NaN      */
+    CHECK(v && basta_type(basta_array_get(v, 5)) == BASTA_LABEL);    /* NaNa     */
+    CHECK(v && basta_type(basta_array_get(v, 6)) == BASTA_NULL);     /* null     */
+    CHECK(v && basta_type(basta_array_get(v, 7)) == BASTA_LABEL);    /* nullable */
+    CHECK(v && basta_type(basta_array_get(v, 8)) == BASTA_LABEL);    /* true.    */
+    basta_free(v);
+
+    v = basta_parse_cstr("{0b12: 1, 0xdeadbeefg: 2, Inf: 3, truer: 4}", &r);
+    CHECK(v != NULL && basta_count(v) == 4);
+    CHECK(v && basta_get_number(basta_map_get(v, "0b12")) == 1.0);
+    CHECK(v && basta_get_number(basta_map_get(v, "0xdeadbeefg")) == 2.0);
+    CHECK(v && basta_get_number(basta_map_get(v, "Inf")) == 3.0);
+    CHECK(v && basta_get_number(basta_map_get(v, "truer")) == 4.0);
+    basta_free(v);
+
+    v = basta_parse_cstr("{x: 12ab}", &r);
+    CHECK(v != NULL && basta_type(basta_map_get(v, "x")) == BASTA_LABEL);
+    CHECK(v && strcmp(basta_get_label(basta_map_get(v, "x")), "12ab") == 0);
+    basta_free(v);
+
+    /* signed spellings are neither bare keys nor bare section names */
+    v = basta_parse_cstr("{-0x1f: 1}", &r);
+    CHECK(v == NULL && r.code != BASTA_OK);
+    v = basta_parse_cstr("@-5 { a: 1 }", &r);
+    CHECK(v == NULL && r.code != BASTA_OK);
+}
+
+/* The number production is strict (matches the grammar): no leading zeros,
+   0x/0b need a digit, a fraction needs a digit.  A digit-led run that fails
+   these is a label; a '-'-led run that fails them is an error. */
+static void test_number_strictness(void) {
+    SECTION("number strictness (grammar conformance)");
+    BastaResult r;
+    BastaValue *v;
+
+    v = basta_parse_cstr("[0, 00, 007, 08, 10, -0, 0.5, 1., 0x, 0b, 0x1f, 0b10]", &r);
+    CHECK(v != NULL && basta_count(v) == 12);
+    CHECK(v && basta_type(basta_array_get(v, 0))  == BASTA_NUMBER);  /* 0    */
+    CHECK(v && basta_type(basta_array_get(v, 1))  == BASTA_LABEL);   /* 00   */
+    CHECK(v && basta_type(basta_array_get(v, 2))  == BASTA_LABEL);   /* 007  */
+    CHECK(v && strcmp(basta_get_label(basta_array_get(v, 2)), "007") == 0);
+    CHECK(v && basta_type(basta_array_get(v, 3))  == BASTA_LABEL);   /* 08   */
+    CHECK(v && basta_type(basta_array_get(v, 4))  == BASTA_NUMBER);  /* 10   */
+    CHECK(v && basta_type(basta_array_get(v, 5))  == BASTA_NUMBER);  /* -0   */
+    CHECK(v && basta_type(basta_array_get(v, 6))  == BASTA_NUMBER);  /* 0.5  */
+    CHECK(v && basta_type(basta_array_get(v, 7))  == BASTA_LABEL);   /* 1.   */
+    CHECK(v && basta_type(basta_array_get(v, 8))  == BASTA_LABEL);   /* 0x   */
+    CHECK(v && basta_type(basta_array_get(v, 9))  == BASTA_LABEL);   /* 0b   */
+    CHECK(v && basta_type(basta_array_get(v, 10)) == BASTA_NUMBER);  /* 0x1f */
+    CHECK(v && basta_type(basta_array_get(v, 11)) == BASTA_NUMBER);  /* 0b10 */
+    basta_free(v);
+
+    /* '-'-led runs that are not valid numbers are errors */
+    v = basta_parse_cstr("[-]", &r);    CHECK(v == NULL && r.code != BASTA_OK);
+    v = basta_parse_cstr("[-x]", &r);   CHECK(v == NULL && r.code != BASTA_OK);
+    v = basta_parse_cstr("[-007]", &r); CHECK(v == NULL && r.code != BASTA_OK);
+    v = basta_parse_cstr("[-0x]", &r);  CHECK(v == NULL && r.code != BASTA_OK);
+
+    /* Well-formed negatives still parse */
+    v = basta_parse_cstr("[-7, -0, -0.5, -0x10, -Inf]", &r);
+    CHECK(v != NULL && basta_count(v) == 5);
+    if (v) for (size_t i = 0; i < 5; i++)
+        CHECK(basta_type(basta_array_get(v, i)) == BASTA_NUMBER);
+    basta_free(v);
+
+    /* Degenerate numerics are labels in key and section position too */
+    v = basta_parse_cstr("{007: 1, 0x: 2}", &r);
+    CHECK(v != NULL && basta_count(v) == 2);
+    CHECK(v && basta_get_number(basta_map_get(v, "007")) == 1.0);
+    CHECK(v && basta_get_number(basta_map_get(v, "0x")) == 2.0);
+    basta_free(v);
+
+    v = basta_parse_cstr("@007 { a: 1 }", &r);
+    CHECK(v != NULL && basta_type(basta_map_get(v, "007")) == BASTA_MAP);
+    basta_free(v);
+}
+
 int main(void) {
     printf("Basta test suite\n");
 
@@ -1273,6 +1465,9 @@ int main(void) {
     test_wire_encoding();
     test_sections_flag();
     test_dot_in_labels();
+    test_atom_labels();
+    test_atom_labels_edges();
+    test_number_strictness();
     test_hex_numbers();
     test_binary_numbers();
     test_hex_bin_builder();

@@ -23,6 +23,13 @@ members             : blank | member-list ;
 member-list         : member , { blank , "," , blank , member } ;
 member              : blank , label , blank , ":" , blank , element ;
 
+(* A map key -- and likewise a section name (see `section`) -- is a `label`,
+   not a `value`.  A label spelled like a keyword or a number is taken as that
+   label here: { true: false } has key `true` (a label) mapping to the boolean
+   false; { 0: 1 } has key `0`; @0 { ... } names a section `0`.  Only
+   unquoted-labels qualify unquoted -- every character must be a labelchar --
+   so a signed spelling like -5 is not a bare key (quote it: "-5"). *)
+
 elements            : blank | elements-list ;
 elements-list       : element , { blank , "," , blank , element } ;
 element             : blank , value , blank ;
@@ -54,11 +61,39 @@ byte                : (* any byte value 0x00..0xFF *) ;
 
 (* All remaining productions are identical to Pasta. *)
 
+(* Disambiguation in VALUE position.
+   A maximal run of labelchars (see unquoted-label) can match more than one
+   alternative of `value`.  Precedence during parsing is:
+
+       keyword (true, false, null, Inf, NaN)  >  number  >  label-ref
+
+   A lexeme that spells a keyword is that keyword; otherwise a lexeme that
+   spells a valid number is that number; otherwise it is a label-ref (naming
+   a section for alforno link resolution).  Keywords and numbers are never
+   treated as references.  Examples:  true -> boolean,  0 -> number,
+   123abc -> label-ref (not a valid number, hence a label).
+
+   A blob is orthogonal to all of the above: it is dispatched solely by the
+   0x00 sentinel, which is not a labelchar and cannot begin a label or number.
+
+   This precedence applies ONLY in value position.  A map key and a section
+   name are `label`, not `value` (see member), so no keyword/number competitor
+   exists there. *)
 label-ref           : unquoted-label ;
 
 label               : unquoted-label | quoted-label ;
 unquoted-label      : labelchar , { labelchar } ;
 quoted-label        : "\"" , { stringchar } , "\"" ;
+
+(* unquoted-label is tokenised by MAXIMAL MUNCH: the longest run of labelchars
+   from the current position.  A run that begins with a digit but is not a
+   valid number is therefore a single label, never a number followed by a
+   second token.  This covers runs with trailing non-numeric labelchars
+   (123abc, 0x1fg, 1_000, 12.3.4) AND runs the `number` production rejects on
+   their own: a leading zero (007, 08 -- see `integer`), an empty 0x/0b prefix
+   (0x, 0b), or a dot with no fractional digit (1.).  Because '-' is not a
+   labelchar, a '-'-led run that is not a valid number (-, -007, -abc) is an
+   error, not a label; a well-formed signed number (-5, -Inf) is a number. *)
 
 string              : simple-string | multiline-string ;
 simple-string       : "\"" , { stringchar } , "\"" ;

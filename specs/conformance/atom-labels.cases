@@ -1,0 +1,218 @@
+; ====================================================================
+; atom-labels.cases
+; Conformance corpus for the Pasta / Basta LABEL & ATOM grammar.
+;
+; Basta is a superset of Pasta; every case below is pure text and behaves
+; identically under both.  Blob values (Basta-only) are binary and cannot
+; live in this text corpus — they are covered by the Basta library test
+; suite (basta_test.c).
+;
+; This corpus pins the behaviour that follows from the grammar treating
+; map keys, section names and value-position label-refs as `label`
+; (unquoted-label | quoted-label), where unquoted-label is the MAXIMAL run
+; of labelchars.  See ../Basta.txt (value-position precedence, maximal
+; munch, keys-are-labels).
+;
+; FORMAT
+;   Lines beginning with ';' are comments.  Blank lines are ignored.
+;   A case is two consecutive content lines:
+;       > <input>          the input document (verbatim after the "> " prefix)
+;       = <fingerprint>    expected structural fingerprint, or ERR
+;
+; FINGERPRINT (serializer-independent structural encoding)
+;       null | true | false | num | str:TEXT | lbl:TEXT | blob
+;       [f,f,...]          array, in order
+;       {k=f,k=f,...}      map, in document order; k is the key text verbatim
+;   Scalars are encoded by KIND: every number is `num` (its value is not
+;   part of this corpus), booleans and null by name, strings/labels with
+;   their text.  ERR means the input must be rejected by the parser.
+; ====================================================================
+
+; --- value position: numbers stay numbers -------------------------
+> [0]
+= [num]
+> [42]
+= [num]
+> [-7]
+= [num]
+> [3.14]
+= [num]
+> [-0.5]
+= [num]
+> [0x1f]
+= [num]
+> [0X1F]
+= [num]
+> [0b1010]
+= [num]
+> [-0x10]
+= [num]
+> [Inf]
+= [num]
+> [-Inf]
+= [num]
+> [NaN]
+= [num]
+
+; --- value position: digit-led non-numbers are labels (maximal munch)
+> [123abc]
+= [lbl:123abc]
+> [12ab]
+= [lbl:12ab]
+> [1_000]
+= [lbl:1_000]
+> [0x1fg]
+= [lbl:0x1fg]
+> [0b12]
+= [lbl:0b12]
+> [12.3.4]
+= [lbl:12.3.4]
+> [1.2.3]
+= [lbl:1.2.3]
+> [5e3]
+= [lbl:5e3]
+> [3d]
+= [lbl:3d]
+> [0xdeadbeef]
+= [num]
+> [0xdeadbeefg]
+= [lbl:0xdeadbeefg]
+
+; --- value position: plain labels ---------------------------------
+> [foo]
+= [lbl:foo]
+> [.leading]
+= [lbl:.leading]
+> [server.host]
+= [lbl:server.host]
+> [_priv]
+= [lbl:_priv]
+
+; --- value position: keyword precedence ---------------------------
+> [true]
+= [true]
+> [false]
+= [false]
+> [null]
+= [null]
+> [truer]
+= [lbl:truer]
+> [Infi]
+= [lbl:Infi]
+> [NaNa]
+= [lbl:NaNa]
+> [nullable]
+= [lbl:nullable]
+> [true.]
+= [lbl:true.]
+
+; --- keys: number / keyword / label spellings ---------------------
+> {0: 1}
+= {0=num}
+> {123: 1}
+= {123=num}
+> {123abc: 1}
+= {123abc=num}
+> {true: false}
+= {true=false}
+> {false: 1}
+= {false=num}
+> {null: 1}
+= {null=num}
+> {Inf: 1}
+= {Inf=num}
+> {NaN: 1}
+= {NaN=num}
+> {3.14: 1}
+= {3.14=num}
+> {0x1f: 1}
+= {0x1f=num}
+> {server.host: 1}
+= {server.host=num}
+
+; --- keys: '-' is not a labelchar, so signed spellings are not keys
+> {-5: 1}
+= ERR
+> {-Inf: 1}
+= ERR
+> {-0x1f: 1}
+= ERR
+
+; --- keys: quoted-label permits anything --------------------------
+> {"0": 1}
+= {0=num}
+> {"-5": 1}
+= {-5=num}
+> {"true": 1}
+= {true=num}
+
+; --- section names are labels -------------------------------------
+> @0 { a: 1 }
+= {0={a=num}}
+> @true { a: 1 }
+= {true={a=num}}
+> @123abc { a: 1 }
+= {123abc={a=num}}
+> @-5 { a: 1 }
+= ERR
+
+; --- regressions: still invalid -----------------------------------
+> {key value}
+= ERR
+> {a: }
+= ERR
+> [1,,2]
+= ERR
+> {,}
+= ERR
+
+; --- nested / mixed -----------------------------------------------
+> {k: [true, 0, foo, 123abc]}
+= {k=[true,num,lbl:foo,lbl:123abc]}
+> [{a: 0}, {b: 12ab}]
+= [{a=num},{b=lbl:12ab}]
+
+; --- number strictness: not a valid number => label in value position
+; The grammar's `integer` forbids leading zeros, `0x`/`0b` need >= 1 digit,
+; and a fraction needs >= 1 digit; such a run is still a valid unquoted-label,
+; so in value position it is a label-ref.
+> [0]
+= [num]
+> [00]
+= [lbl:00]
+> [007]
+= [lbl:007]
+> [08]
+= [lbl:08]
+> [10]
+= [num]
+> [-0]
+= [num]
+> [0.5]
+= [num]
+> [1.]
+= [lbl:1.]
+> [0x]
+= [lbl:0x]
+> [0b]
+= [lbl:0b]
+
+; --- number strictness: '-'-led non-numbers are errors (never labels) ---
+; '-' is not a labelchar, so a '-'-led run that is not a valid number cannot
+; fall back to a label.
+> [-]
+= ERR
+> [-x]
+= ERR
+> [-007]
+= ERR
+> [-0x]
+= ERR
+
+; --- number strictness in key / section position ------------------------
+> {007: 1}
+= {007=num}
+> {0x: 1}
+= {0x=num}
+> @007 { a: 1 }
+= {007={a=num}}
