@@ -40,6 +40,18 @@ if(UNIX)
     target_link_libraries(basta PRIVATE m)
 endif()
 
+# On Windows the import/runtime split matters: place the DLL in bin/ (mirrors
+# Pasta) so consumers -- and the test below -- find it at load time.
+if(WIN32)
+    set_target_properties(basta PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+        ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
+    )
+endif()
+
+# Place the test exe next to the DLL so it finds it at runtime.
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+
 # ---- Tests ----
 
 if(BASTA_BUILD_TESTS)
