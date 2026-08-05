@@ -66,12 +66,25 @@ static void rstrip(char *s) {
         s[--n] = '\0';
 }
 
+/* Corpus inputs are one line, so a case that needs a newline (a line comment
+   followed by content, say) writes \n; \\ is a literal backslash.  Rewrites
+   in place -- the result is never longer than the input. */
+static void unescape(char *s) {
+    char *w = s;
+    for (const char *r = s; *r; r++) {
+        if (*r == '\\' && r[1] == 'n')      { *w++ = '\n'; r++; }
+        else if (*r == '\\' && r[1] == '\\') { *w++ = '\\'; r++; }
+        else                                  { *w++ = *r; }
+    }
+    *w = '\0';
+}
+
 int main(int argc, char **argv) {
     const char *path = argc > 1 ? argv[1] : "atom-labels.cases";
     FILE *fp = fopen(path, "rb");
     if (!fp) { fprintf(stderr, "cannot open corpus '%s'\n", path); return 2; }
 
-    char line[2048], input[2048];
+    char line[2048], input[2048], shown[2048];
     int have_input = 0, total = 0, pass = 0, fail = 0;
 
     while (fgets(line, sizeof(line), fp)) {
@@ -80,6 +93,8 @@ int main(int argc, char **argv) {
         if (line[0] == '>' && line[1] == ' ') {
             snprintf(input, sizeof(input), "%s", line + 2);
             rstrip(input);
+            snprintf(shown, sizeof(shown), "%s", input); /* escaped form, for display */
+            unescape(input);
             have_input = 1;
             continue;
         }
@@ -112,7 +127,7 @@ int main(int argc, char **argv) {
             }
             if (ok) pass++; else fail++;
             printf("  [%s] %-32s  exp=%-22s got=%s\n",
-                   ok ? "PASS" : "FAIL", input, expected, got);
+                   ok ? "PASS" : "FAIL", shown, expected, got);
             basta_free(v);
         }
     }

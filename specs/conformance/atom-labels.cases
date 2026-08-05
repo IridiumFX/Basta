@@ -16,8 +16,10 @@
 ; FORMAT
 ;   Lines beginning with ';' are comments.  Blank lines are ignored.
 ;   A case is two consecutive content lines:
-;       > <input>          the input document (verbatim after the "> " prefix)
+;       > <input>          the input document (after the "> " prefix)
 ;       = <fingerprint>    expected structural fingerprint, or ERR
+;   In <input>, \n means a newline and \\ a literal backslash, so a case can
+;   span lines (needed for line comments).  No other escape is recognised.
 ;
 ; FINGERPRINT (serializer-independent structural encoding)
 ;       null | true | false | num | str:TEXT | lbl:TEXT | blob
@@ -216,3 +218,4 @@
 = {0x=num}
 > @007 { a: 1 }
 = {007={a=num}}
+

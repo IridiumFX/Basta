@@ -1249,6 +1249,57 @@ static void test_hex_bin_builder(void) {
 /*  keyword.  Value position keeps keyword/number precedence.          */
 /* ------------------------------------------------------------------ */
 
+/* C-style comments are `blank`, identical to Pasta — the grammars differ only
+   in Basta's blob value.  See the comment production in specs/Basta.txt. */
+static void test_c_style_comments(void) {
+    SECTION("C-style comments (// and block)");
+    BastaResult r;
+    BastaValue *v;
+
+    v = basta_parse_cstr("// header\n// another\n{key: 1}", &r);
+    CHECK(v != NULL && r.code == BASTA_OK);
+    CHECK(v && basta_get_number(basta_map_get(v, "key")) == 1.0);
+    basta_free(v);
+
+    v = basta_parse_cstr("{a: 1} // tail", &r);
+    CHECK(v != NULL && basta_get_number(basta_map_get(v, "a")) == 1.0);
+    basta_free(v);
+
+    v = basta_parse_cstr("{a: 1, // note\n b: 2}", &r);
+    CHECK(v != NULL && basta_count(v) == 2);
+    basta_free(v);
+
+    v = basta_parse_cstr("/* header */ {a: 1}", &r);
+    CHECK(v != NULL && basta_get_number(basta_map_get(v, "a")) == 1.0);
+    basta_free(v);
+
+    v = basta_parse_cstr("{a: 1, /* one\ntwo */ b: 2}", &r);
+    CHECK(v != NULL && basta_count(v) == 2);
+    basta_free(v);
+
+    v = basta_parse_cstr("; semi\n// slash\n/* block */\n{a: 1}", &r);
+    CHECK(v != NULL && basta_get_number(basta_map_get(v, "a")) == 1.0);
+    basta_free(v);
+
+    /* Delimiters inside strings are data, not comments. */
+    v = basta_parse_cstr("{a: \"http://x/y\", b: \"/* not */\"}", &r);
+    CHECK(v != NULL);
+    CHECK(v && strcmp(basta_get_string(basta_map_get(v, "a")), "http://x/y") == 0);
+    CHECK(v && strcmp(basta_get_string(basta_map_get(v, "b")), "/* not */") == 0);
+    basta_free(v);
+
+    v = basta_parse_cstr("{a: \"\"\"// not a comment\"\"\"}", &r);
+    CHECK(v != NULL);
+    CHECK(v && strcmp(basta_get_string(basta_map_get(v, "a")), "// not a comment") == 0);
+    basta_free(v);
+
+    /* Unterminated block comment and a lone '/' are parse errors. */
+    v = basta_parse_cstr("{a: 1 /* never closed", &r);
+    CHECK(v == NULL && r.code != BASTA_OK);
+    v = basta_parse_cstr("{a: /}", &r);
+    CHECK(v == NULL && r.code != BASTA_OK);
+}
+
 static void test_atom_labels(void) {
     SECTION("atom labels (grammar alignment)");
     BastaResult r;
@@ -1465,6 +1516,7 @@ int main(void) {
     test_wire_encoding();
     test_sections_flag();
     test_dot_in_labels();
+    test_c_style_comments();
     test_atom_labels();
     test_atom_labels_edges();
     test_number_strictness();

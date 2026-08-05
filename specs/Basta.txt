@@ -124,7 +124,19 @@ nonalphanumeric     : "'" | "(" | ")" | "*" | "+" | "," | "-" | "/" | ":"
                     | ";" | "<" | "=" | ">" | "?" | "@" | "[" | "\" | "]" | "^"
                     | "`" | "{" | "|" | "}" | "~" ;
 blank               : { nonprint | comment } ;
-comment             : ";" , { anychar-but-newline } ;
+comment             : line-comment | block-comment ;
+line-comment        : ( ";" | "//" ) , { anychar-but-newline } ;
+block-comment       : "/*" , { anychar-but-close-delimiter } , "*/" ;
+
+(* Comments are blank: they may appear anywhere `blank` may.  A block comment
+   may span newlines and does not nest; it ends at the first "*/".  A block
+   comment left unterminated at end of input does not match block-comment and
+   is therefore a parse error.  Comment delimiters have no meaning inside a
+   string or multiline string -- "http://x" is a URL, not a comment -- because
+   the string scanner runs in its own mode.  Outside a string, '/' is not a
+   labelchar and begins no other token, so it is only ever a comment lead-in
+   or an error.  Comment scanning is also never entered inside a blob: blob
+   bytes are consumed by length, not scanned as text. *)
 nonprint            : EOL | 0x20 | 0x09 ;
 EOL                 : 0x0A | 0x0D ;
 empty               : ;

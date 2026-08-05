@@ -1,0 +1,55 @@
+; ====================================================================
+; comments.cases
+; Conformance corpus for the Pasta / Basta COMMENT grammar.
+;
+; Three comment forms, all of which are `blank` and may appear wherever
+; blank may:  ';' line,  '//' line,  '/* */' block.  See ../Basta.txt
+; (comment / line-comment / block-comment productions).
+;
+; Basta shares this production with Pasta exactly; only the blob value differs.
+; Comment scanning is never entered inside a blob (blob bytes are consumed by
+; length, not scanned as text).
+;
+; FORMAT / FINGERPRINT are identical to atom-labels.cases; see that file.
+; In <input>, \n means a newline and \ a literal backslash.
+; ====================================================================
+
+; --- comments: ';' line, '//' line, '/* */' block ----------------------
+; All three are `blank` and may appear wherever blank may.  Pasta and Basta
+; share this production exactly; only the blob value differs between them.
+> {a: 1} ; semi tail
+= {a=num}
+> ; hdr\n{a: 1}
+= {a=num}
+> {a: 1} // slash tail
+= {a=num}
+> // hdr\n{a: 1}
+= {a=num}
+> {a: 1, // note\n b: 2}
+= {a=num,b=num}
+> /* hdr */ {a: 1}
+= {a=num}
+> {a: 1, /* mid */ b: 2}
+= {a=num,b=num}
+> {a: 1, /* one\ntwo */ b: 2}
+= {a=num,b=num}
+> ; semi\n// slash\n/* block */\n{a: 1}
+= {a=num}
+> [1, /* c */ 2, // d\n3]
+= [num,num,num]
+
+; --- comment delimiters inside strings are data, not comments ----------
+> {a: "http://x/y"}
+= {a=str:http://x/y}
+> {a: "/* not a comment */"}
+= {a=str:/* not a comment */}
+> {a: "// not a comment"}
+= {a=str:// not a comment}
+
+; --- malformed: unterminated block, bare slash -------------------------
+> {a: 1 /* never closed
+= ERR
+> {a: /}
+= ERR
+> {a: / 1}
+= ERR

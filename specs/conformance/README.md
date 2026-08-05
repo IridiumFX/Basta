@@ -15,8 +15,38 @@ implementation can self-check against the same cases.
 
 | File | What it is |
 |---|---|
-| `atom-labels.cases` | The corpus: `input → expected structural fingerprint`. The source of truth. |
-| `run_conformance.c` | Reference runner (public Basta API only). Proves the reference implementation matches the corpus, and serves as a worked example for other runners. |
+| `atom-labels.cases` | Label / atom grammar: `input → expected structural fingerprint`. 79 cases. |
+| `comments.cases` | Comment grammar (`;`, `//`, `/* */`). 16 cases. |
+| `run_conformance.c` | Reference runner (public Basta API only). Proves the reference implementation matches the corpora, and serves as a worked example for other runners. |
+| `superset_check.c` | Executable check of the superset claim — parses the same inputs with *both* libraries and compares. |
+
+The `.cases` files are the source of truth; the runner takes one as its argument.
+
+## Checking the superset claim
+
+`superset_check.c` tests Basta's central claim directly: every document Pasta
+accepts must parse under Basta to the same structure, and — since blobs are
+binary and cannot appear in text — nothing else should parse under Basta that
+Pasta rejects. It needs a Pasta checkout beside this one (the Configlets layout);
+it is a verification tool, not a build dependency of Basta.
+
+```bash
+gcc -std=c11 -DPASTA_STATIC -DBASTA_STATIC -I../../../Pasta/src/main/h -I../../src/main/h superset_check.c ../../../Pasta/src/main/c/pasta_*.c ../../src/main/c/basta_*.c -lm -o superset_check
+./superset_check
+```
+
+Expected tail (exit status 0):
+
+```
+  OK=24  BROKEN=0  EXT=0
+  PASS: identical text language; blob is the only difference.
+```
+
+`BROKEN` means the superset property is violated. `EXT` means Basta accepts
+something Pasta rejects — permitted in principle for a superset, but for a text
+corpus it means the grammars have drifted apart on something other than blobs.
+A C-style-comment divergence once sat undetected in exactly that category; this
+check exists so it cannot recur silently.
 
 ## Corpus format
 
@@ -24,9 +54,12 @@ Plain text. Lines starting with `;` are comments; blank lines are ignored.
 Each case is two consecutive content lines:
 
 ```
-> <input>          the input document (verbatim after the "> " prefix)
+> <input>          the input document (after the "> " prefix)
 = <fingerprint>    the expected structural fingerprint, or ERR
 ```
+
+Within `<input>`, `\n` means a newline and `\\` a literal backslash — a case can
+therefore span lines, which line comments need. No other escape is recognised.
 
 The **fingerprint** is a serializer-independent encoding of the parse tree:
 
@@ -49,25 +82,36 @@ strings and labels with their text, a binary blob as `blob`.
 - Keys and section names are `label`: `{0: 1}`, `{true: false}`, `@0 { … }`.
 - `-` is not a labelchar: `{-5: 1}` and `@-5 { … }` are errors (quote to use).
 - Regressions that must stay invalid (`{key value}`, `{a: }`, `[1,,2]`).
+- All three comment forms (`;`, `//`, `/* */`) as `blank`; that delimiters inside
+  strings are data, not comments (`"http://x/y"`); and that an unterminated block
+  comment or a lone `/` is an error.
 
 Blob values are binary and cannot live in this text corpus. The `blob`
 fingerprint kind exists for completeness; blob semantics are exercised directly
-by the Basta library suite (`src/test/c/basta_test.c`).
+by the Basta library suite (`src/test/c/basta_test.c`). Apart from blobs, Basta
+and Pasta accept exactly the same language — the case lines here are identical to
+those in Pasta's copy of these corpora (only the headers differ, each citing its
+own spec), and keeping them so is the check that the superset claim still holds.
 
 ## Running the reference runner
 
 From this directory, built straight from the library sources:
 
 ```bash
-gcc -std=c11 -DBASTA_STATIC -I../../src/main/h -I../../src/main/c \
-    run_conformance.c ../../src/main/c/basta_*.c -o run_conformance
-./run_conformance atom-labels.cases
+gcc -std=c11 -DBASTA_STATIC -I../../src/main/h -I../../src/main/c run_conformance.c ../../src/main/c/basta_*.c -o run_conformance
 ```
 
-Expected tail:
+Then run each corpus:
+
+```bash
+./run_conformance atom-labels.cases && ./run_conformance comments.cases
+```
+
+Expected tails:
 
 ```
-conformance: 62/62 passed
+conformance: 79/79 passed
+conformance: 16/16 passed
 ```
 
 Exit status is `0` iff every case matches.
