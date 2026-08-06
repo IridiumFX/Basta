@@ -922,6 +922,48 @@ static void test_blob_toplevel(void) {
     basta_free(back);
 }
 
+/* A bare blob is the only document whose final byte is payload, so it is the
+   only one where a trailing newline could depend on the payload.  Written
+   length must be the wire length regardless of what the blob ends with. */
+static void test_blob_toplevel_no_trailing_newline(void) {
+    SECTION("bare blob: written length is not payload-dependent");
+
+    /* Same length, differing only in whether the payload ends with 0x0A. */
+    uint8_t ends_nl[]  = {0x11, 0x22, 0x0A};
+    uint8_t ends_ff[]  = {0x11, 0x22, 0xFF};
+
+    size_t len_nl, len_ff;
+    BastaValue *a = basta_new_blob(ends_nl, sizeof(ends_nl));
+    BastaValue *b = basta_new_blob(ends_ff, sizeof(ends_ff));
+    char *sa = basta_write(a, BASTA_PRETTY, &len_nl);
+    char *sb = basta_write(b, BASTA_PRETTY, &len_ff);
+    CHECK(sa != NULL && sb != NULL);
+
+    /* wire length = sentinel + 8 size bytes + payload; no trailing newline */
+    CHECK(len_nl == 1 + 8 + sizeof(ends_nl));
+    CHECK(len_ff == 1 + 8 + sizeof(ends_ff));
+    CHECK(len_nl == len_ff);
+
+    /* and it still round-trips */
+    BastaResult r;
+    BastaValue *back = basta_parse(sb, len_ff, &r);
+    CHECK(back != NULL && r.code == BASTA_OK);
+    CHECK(back && basta_type(back) == BASTA_BLOB);
+    size_t gl;
+    const uint8_t *got = back ? basta_get_blob(back, &gl) : NULL;
+    CHECK(got && gl == sizeof(ends_ff) && memcmp(got, ends_ff, gl) == 0);
+
+    /* a container still gets its trailing newline in pretty mode */
+    BastaValue *m = basta_new_map();
+    basta_set(m, "k", basta_new_blob(ends_ff, sizeof(ends_ff)));
+    size_t len_m;
+    char *sm = basta_write(m, BASTA_PRETTY, &len_m);
+    CHECK(sm != NULL && len_m > 0 && sm[len_m - 1] == '\n');
+
+    free(sa); free(sb); free(sm);
+    basta_free(a); basta_free(b); basta_free(m); basta_free(back);
+}
+
 /* ------------------------------------------------------------------ */
 /*  24. Multiline string adjacent to blob — no cross-contamination    */
 /* ------------------------------------------------------------------ */
@@ -1509,6 +1551,7 @@ int main(void) {
     test_blob_all_ff();
     test_blob_all_zeros();
     test_blob_toplevel();
+    test_blob_toplevel_no_trailing_newline();
     test_multiline_string_adjacent_to_blob();
     test_write_null_out_len();
     test_error_blob_in_key_position();

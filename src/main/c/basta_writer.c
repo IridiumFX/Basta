@@ -330,9 +330,14 @@ BASTA_API char *basta_write(const BastaValue *v, int flags, size_t *out_len) {
     if (err) { free(b.data); return NULL; }
 
     /* Ensure trailing newline for pretty text output.
-       Skip this if the document ends with binary blob data (last byte
-       is not a printable text character). */
-    if (!compact && b.len > 0 && b.data[b.len - 1] != '\n') {
+       Skipped when the document is a bare blob, which is the only shape whose
+       final byte is payload: a container closes with ']' or '}', a section
+       document already ends in '\n', and no text scalar ends in a newline.
+       Testing the last byte alone would append or not depending on whether
+       the payload happened to end in 0x0A, making the written length
+       payload-dependent -- which matters to anyone hashing writer output. */
+    if (!compact && b.len > 0 && v && v->type != BASTA_BLOB
+        && b.data[b.len - 1] != '\n') {
         buf_putc(&b, '\n');
     }
 
