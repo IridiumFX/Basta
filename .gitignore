@@ -1,5 +1,6 @@
 build/
 cmake-build-*/
+target/
 .idea/
 *.exe
 *.dll
