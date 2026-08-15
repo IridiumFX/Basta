@@ -1,6 +1,14 @@
 #include "basta_internal.h"
 #include <stdio.h>
 #include <ctype.h>
+#include <float.h>
+
+/* DBL_DECIMAL_DIG is C11; fall back to the binary64 value if a toolchain
+   predates it.  The macro is preferred because 17 is correct for IEEE 754
+   binary64 and for nothing else. */
+#ifndef DBL_DECIMAL_DIG
+  #define DBL_DECIMAL_DIG 17
+#endif
 
 /* ------------------------------------------------------------------ */
 /*  Dynamic byte buffer                                                */
@@ -164,10 +172,51 @@ static int write_number(Buf *b, double n, uint8_t fmt) {
         return buf_puts(b, bin + pos);
     }
 
-    if (is_int)
+    if (is_int) {
         snprintf(tmp, sizeof(tmp), "%lld", (long long)n);
-    else
-        snprintf(tmp, sizeof(tmp), "%.17g", n);
+    } else {
+        /* Shortest form that round-trips, verified rather than computed: widen
+           until strtod returns the same double.  A hand-written value settles
+           in one or two digits, so `0.15` writes as `0.15` rather than
+           `0.14999999999999999`, while a value that genuinely needs the full
+           width still gets it.
+
+           Start at 1, not at DBL_DIG.  %g strips trailing zeros, so starting
+           wide looks equivalent, but for a subnormal several 15-digit strings
+           can name the same value and the correctly-rounded one is not the
+           shortest -- starting at 1 finds the short form there too.
+
+           The loop asks the platform's own printf/strtod rather than deriving
+           the answer from binary64's properties (as Grisu or Ryu would), so it
+           stays correct wherever `double` is something else.  On a libc whose
+           conversions are not correctly rounded it simply falls through to
+           DBL_DECIMAL_DIG and emits what this writer always emitted, so it
+           cannot be worse than the unconditional widest form. */
+        for (int prec = 1; prec <= DBL_DECIMAL_DIG; prec++) {
+            snprintf(tmp, sizeof(tmp), "%.*g", prec, n);
+            if (strtod(tmp, NULL) == n) break;
+        }
+        /* %g switches to exponential notation outside a narrow window, but the
+           grammar's `number` has no exponent production -- 1e+16 reads back as
+           the label `1e` followed by a stray `+16`, so the document either
+           fails to parse or silently yields a label where a number was written.
+           Prefer a fixed-notation form whenever one round-trips and fits the
+           buffer; that covers everything up to roughly 1e62.  Beyond that
+           (and below ~1e-60) fixed notation would run to hundreds of digits,
+           so the exponent form stands and such values remain unrepresentable
+           in the current grammar. */
+        if (strpbrk(tmp, "eE")) {
+            char fixed[sizeof tmp];
+            for (int prec = 0; prec <= DBL_DECIMAL_DIG * 2; prec++) {
+                int len = snprintf(fixed, sizeof fixed, "%.*f", prec, n);
+                if (len > 0 && (size_t)len < sizeof fixed
+                    && strtod(fixed, NULL) == n) {
+                    memcpy(tmp, fixed, (size_t)len + 1);
+                    break;
+                }
+            }
+        }
+    }
     return buf_puts(b, tmp);
 }
 

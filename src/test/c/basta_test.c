@@ -1293,6 +1293,65 @@ static void test_hex_bin_builder(void) {
 
 /* C-style comments are `blank`, identical to Pasta — the grammars differ only
    in Basta's blob value.  See the comment production in specs/Basta.txt. */
+/* The writer emits the shortest decimal that round-trips, not a fixed width,
+   and never an exponent form the grammar cannot read back.  Mirrors Pasta's
+   test_write_shortest_decimal.  Reported by a downstream consumer layering
+   hand-written pastlets. */
+static void test_write_shortest_decimal(void) {
+    SECTION("writer: shortest round-trip decimals");
+    BastaResult r;
+
+    struct { const char *in, *want; } cases[] = {
+        { "0.15",    "0.15"    },   /* was 0.14999999999999999 */
+        { "0.4",     "0.4"     },   /* was 0.40000000000000002 */
+        { "3.14159", "3.14159" },   /* was 3.1415899999999999  */
+        { "0.1",     "0.1"     },
+        { "0.5",     "0.5"     },
+        { "-0.15",   "-0.15"   },
+        { "100",     "100"     },
+        { "0x1f",    "0x1f"    },
+        { "0b1010",  "0b1010"  },
+    };
+    for (size_t i = 0; i < sizeof cases / sizeof *cases; i++) {
+        char doc[64], want[64];
+        snprintf(doc,  sizeof doc,  "{x: %s}", cases[i].in);
+        snprintf(want, sizeof want, "{x: %s}", cases[i].want);
+        BastaValue *v = basta_parse_cstr(doc, &r);
+        size_t len;
+        char *out = v ? basta_write(v, BASTA_COMPACT, &len) : NULL;
+        CHECK(out && strcmp(out, want) == 0);
+        free(out); basta_free(v);
+    }
+
+    /* Wide and large-magnitude values: exact, and never exponential. */
+    {
+        double wide[] = { 1.0/3.0, 0.1 + 0.2, 1e16, 1e20, 6.02e23, 1.5e-5 };
+        for (size_t i = 0; i < sizeof wide / sizeof *wide; i++) {
+            BastaValue *m = basta_new_map();
+            basta_set(m, "x", basta_new_number(wide[i]));
+            size_t len;
+            char *s = basta_write(m, BASTA_COMPACT, &len);
+            BastaValue *back = s ? basta_parse(s, len, &r) : NULL;
+            const BastaValue *x = back ? basta_map_get(back, "x") : NULL;
+            CHECK(s && !strpbrk(s, "eE"));
+            CHECK(x && basta_type(x) == BASTA_NUMBER);
+            CHECK(x && basta_get_number(x) == wide[i]);
+            free(s); basta_free(m); basta_free(back);
+        }
+    }
+
+    /* Known gap: extreme magnitudes still escape as exponent form, which the
+       grammar has no production for.  See Pasta's mirror of this test. */
+    {
+        BastaValue *m = basta_new_map();
+        basta_set(m, "x", basta_new_number(5e-324));
+        size_t len;
+        char *s = basta_write(m, BASTA_COMPACT, &len);
+        CHECK(s && strpbrk(s, "eE") != NULL);
+        free(s); basta_free(m);
+    }
+}
+
 static void test_c_style_comments(void) {
     SECTION("C-style comments (// and block)");
     BastaResult r;
@@ -1560,6 +1619,7 @@ int main(void) {
     test_sections_flag();
     test_dot_in_labels();
     test_c_style_comments();
+    test_write_shortest_decimal();
     test_atom_labels();
     test_atom_labels_edges();
     test_number_strictness();
