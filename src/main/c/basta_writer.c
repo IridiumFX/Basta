@@ -196,26 +196,10 @@ static int write_number(Buf *b, double n, uint8_t fmt) {
             snprintf(tmp, sizeof(tmp), "%.*g", prec, n);
             if (strtod(tmp, NULL) == n) break;
         }
-        /* %g switches to exponential notation outside a narrow window, but the
-           grammar's `number` has no exponent production -- 1e+16 reads back as
-           the label `1e` followed by a stray `+16`, so the document either
-           fails to parse or silently yields a label where a number was written.
-           Prefer a fixed-notation form whenever one round-trips and fits the
-           buffer; that covers everything up to roughly 1e62.  Beyond that
-           (and below ~1e-60) fixed notation would run to hundreds of digits,
-           so the exponent form stands and such values remain unrepresentable
-           in the current grammar. */
-        if (strpbrk(tmp, "eE")) {
-            char fixed[sizeof tmp];
-            for (int prec = 0; prec <= DBL_DECIMAL_DIG * 2; prec++) {
-                int len = snprintf(fixed, sizeof fixed, "%.*f", prec, n);
-                if (len > 0 && (size_t)len < sizeof fixed
-                    && strtod(fixed, NULL) == n) {
-                    memcpy(tmp, fixed, (size_t)len + 1);
-                    break;
-                }
-            }
-        }
+        /* Whatever %g produces is readable back: `number` carries an exponent
+           production, so 1e+16 and 2.2250738585072014e-308 both round-trip.
+           No fixed-notation fallback is needed, and the exponent form is the
+           more readable one for extreme magnitudes anyway. */
     }
     return buf_puts(b, tmp);
 }

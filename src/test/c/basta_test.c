@@ -1323,9 +1323,12 @@ static void test_write_shortest_decimal(void) {
         free(out); basta_free(v);
     }
 
-    /* Wide and large-magnitude values: exact, and never exponential. */
+    /* Every finite double round-trips exactly, whatever its magnitude --
+       including those where %g emits an exponent, which `number` now admits. */
     {
-        double wide[] = { 1.0/3.0, 0.1 + 0.2, 1e16, 1e20, 6.02e23, 1.5e-5 };
+        double wide[] = { 1.0/3.0, 0.1 + 0.2, 1e16, 1e20, 6.02214076e23,
+                          1.5e-5, 2.2250738585072014e-308, 5e-324,
+                          1.7976931348623157e308, -6.02214076e23 };
         for (size_t i = 0; i < sizeof wide / sizeof *wide; i++) {
             BastaValue *m = basta_new_map();
             basta_set(m, "x", basta_new_number(wide[i]));
@@ -1333,22 +1336,35 @@ static void test_write_shortest_decimal(void) {
             char *s = basta_write(m, BASTA_COMPACT, &len);
             BastaValue *back = s ? basta_parse(s, len, &r) : NULL;
             const BastaValue *x = back ? basta_map_get(back, "x") : NULL;
-            CHECK(s && !strpbrk(s, "eE"));
             CHECK(x && basta_type(x) == BASTA_NUMBER);
             CHECK(x && basta_get_number(x) == wide[i]);
             free(s); basta_free(m); basta_free(back);
         }
     }
 
-    /* Known gap: extreme magnitudes still escape as exponent form, which the
-       grammar has no production for.  See Pasta's mirror of this test. */
+    /* Exponent literals parse; malformed ones stay labels; hex keeps its 'e'. */
     {
-        BastaValue *m = basta_new_map();
-        basta_set(m, "x", basta_new_number(5e-324));
-        size_t len;
-        char *s = basta_write(m, BASTA_COMPACT, &len);
-        CHECK(s && strpbrk(s, "eE") != NULL);
-        free(s); basta_free(m);
+        BastaValue *v = basta_parse_cstr("[5e3, 1E5, 1e+16, 1.5e-5, -2.5e2]", &r);
+        CHECK(v && basta_count(v) == 5);
+        CHECK(v && basta_get_number(basta_array_get(v, 0)) == 5000.0);
+        CHECK(v && basta_get_number(basta_array_get(v, 1)) == 100000.0);
+        CHECK(v && basta_get_number(basta_array_get(v, 3)) == 1.5e-5);
+        CHECK(v && basta_get_number(basta_array_get(v, 4)) == -250.0);
+        basta_free(v);
+
+        v = basta_parse_cstr("[1e, 1ex, 007e5]", &r);
+        CHECK(v && basta_count(v) == 3);
+        CHECK(v && basta_type(basta_array_get(v, 0)) == BASTA_LABEL);
+        CHECK(v && basta_type(basta_array_get(v, 2)) == BASTA_LABEL);
+        basta_free(v);
+
+        v = basta_parse_cstr("[1e+]", &r);
+        CHECK(v == NULL && r.code != BASTA_OK);
+
+        v = basta_parse_cstr("[0x1e, 0b1010]", &r);
+        CHECK(v && basta_get_number(basta_array_get(v, 0)) == 30.0);
+        CHECK(v && basta_get_number(basta_array_get(v, 1)) == 10.0);
+        basta_free(v);
     }
 }
 
@@ -1493,7 +1509,7 @@ static void test_atom_labels_edges(void) {
     CHECK(v && strcmp(basta_get_label(basta_array_get(v, 1)), "0b12") == 0);
     CHECK(v && basta_type(basta_array_get(v, 2)) == BASTA_NUMBER);   /* 0xdeadbeef  */
     CHECK(v && basta_type(basta_array_get(v, 3)) == BASTA_LABEL);    /* 0xdeadbeefg */
-    CHECK(v && basta_type(basta_array_get(v, 4)) == BASTA_LABEL);    /* 5e3    */
+    CHECK(v && basta_type(basta_array_get(v, 4)) == BASTA_NUMBER);   /* 5e3    */
     CHECK(v && basta_type(basta_array_get(v, 5)) == BASTA_LABEL);    /* 3d     */
     CHECK(v && basta_type(basta_array_get(v, 6)) == BASTA_LABEL);    /* 9__    */
     CHECK(v && basta_type(basta_array_get(v, 7)) == BASTA_LABEL);    /* 1.2.3  */

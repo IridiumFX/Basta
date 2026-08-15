@@ -93,7 +93,14 @@ quoted-label        : "\"" , { stringchar } , "\"" ;
    their own: a leading zero (007, 08 -- see `integer`), an empty 0x/0b prefix
    (0x, 0b), or a dot with no fractional digit (1.).  Because '-' is not a
    labelchar, a '-'-led run that is not a valid number (-, -007, -abc) is an
-   error, not a label; a well-formed signed number (-5, -Inf) is a number. *)
+   error, not a label; a well-formed signed number (-5, -Inf) is a number.
+
+   ONE EXCEPTION extends a run past the labelchar set: an exponent sign.
+   "+" and "-" are not labelchars, so a bare maximal run would stop before the
+   sign in 1.5e-5 and leave "-5" as a separate token.  The shape
+   <e|E><+|-><digit> can occur nowhere else, so it is taken as part of the same
+   token -- but not after a hex or binary prefix, where "e" belongs to the
+   literal and 0x1e-5 must remain 0x1e followed by -5. *)
 
 string              : simple-string | multiline-string ;
 simple-string       : "\"" , { stringchar } , "\"" ;
@@ -101,7 +108,24 @@ multiline-string    : "\"\"\"" , { anychar-but-triple-quote } , "\"\"\"" ;
 
 boolean             : "true" | "false" ;
 number              : float-constant | hex-number | bin-number
-                    | signed-integer , [ "." , digits ] ;
+                    | signed-integer , [ "." , digits ] , [ exponent ] ;
+exponent            : ( "e" | "E" ) , [ "+" | "-" ] , digits ;
+
+(* The exponent attaches to DECIMAL numbers only.  A hex or binary literal
+   never takes one: in 0x1e the "e" is a hex digit, so 0x1e-5 is the number
+   0x1e followed by -5, not an exponent.  An exponent needs at least one
+   digit, so 1e and 1e+ are not numbers (1e is a valid unquoted-label and
+   lexes as one; 1e+ is an error, "+" being neither labelchar nor token).
+
+   NOTE the consequence in VALUE position, which follows from the precedence
+   rule above: a lexeme that spells a valid exponent number IS that number and
+   is no longer a label-ref.  5e3 was a label before exponents existed and is
+   the number 5000 now.  This widens an already-accepted class rather than
+   introducing a new kind of surprise -- 0 has always been the number zero in
+   value position rather than a reference to a section named @0.  Sections
+   whose names spell numbers still cannot be referenced; quote such a name to
+   use it as a map key, and prefer a letter-led name for anything meant to be
+   referenced. *)
 float-constant      : "Inf" | "-Inf" | "NaN" ;
 hex-number          : [ "-" ] , "0" , ( "x" | "X" ) , hexdigit , { hexdigit } ;
 bin-number          : [ "-" ] , "0" , ( "b" | "B" ) , bindigit , { bindigit } ;

@@ -72,7 +72,7 @@
 > [1.2.3]
 = [lbl:1.2.3]
 > [5e3]
-= [lbl:5e3]
+= [num]
 > [3d]
 = [lbl:3d]
 > [0xdeadbeef]
@@ -219,3 +219,32 @@
 > @007 { a: 1 }
 = {007={a=num}}
 
+
+; --- exponent notation ------------------------------------------------
+; `number` carries an optional exponent, so a lexeme spelling one is that
+; number rather than a label-ref.  An exponent needs >= 1 digit, and never
+; attaches to a hex/bin literal ('e' is a hex digit there).
+> [1e10]
+= [num]
+> [1E5]
+= [num]
+> [1e+16]
+= [num]
+> [1.5e-5]
+= [num]
+> [-2.5e2]
+= [num]
+> [0e5]
+= [num]
+> [1e]
+= [lbl:1e]
+> [1ex]
+= [lbl:1ex]
+> [007e5]
+= [lbl:007e5]
+> [1e+]
+= ERR
+> [0x1e]
+= [num]
+> {1e10: 1}
+= {1e10=num}

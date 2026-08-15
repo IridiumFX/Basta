@@ -121,6 +121,9 @@ int main(void) {
     check("numbers",          "[0,-7,3.14,0x1f,0b1010,Inf,-Inf,NaN]");
     check("atom labels",      "{0:1,true:false,123abc:2}");
     check("number strictness","[007,0x,1.,00]");
+    check("exponents",        "[1e10,1E5,1e+16,1.5e-5,-2.5e2]");
+    check("bad exponents",    "[1e,1ex,007e5]");
+    check("hex keeps its e",  "[0x1e,0b1010]");
     check("multiline str",    "{a: \"\"\"line\nline\"\"\"}");
     check("quoted key",       "{\"a b\": 1}");
 

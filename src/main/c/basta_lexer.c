@@ -200,10 +200,13 @@ static Token lex_string(Lexer *lex) {
 /* ------------------------------------------------------------------ */
 
 /* Strict number recogniser matching the grammar's `number` production:
-       number  : float-constant | hex-number | bin-number
-               | signed-integer , [ "." , digits ] ;
+       number   : float-constant | hex-number | bin-number
+                | signed-integer , [ "." , digits ] , [ exponent ] ;
+       exponent : ( "e" | "E" ) , [ "+" | "-" ] , digits ;
    No leading zeros in integers (007 is not a number); a fractional part needs
-   at least one digit (1. is not a number); 0x / 0b need at least one digit.
+   at least one digit (1. is not a number); an exponent needs at least one
+   digit (1e and 1e+ are not numbers); 0x / 0b need at least one digit.  An
+   exponent attaches to decimal numbers only -- in 0x1e the 'e' is a hex digit.
    A lexeme that fails here is, in value position, a label-ref when it is a
    valid unquoted-label -- see the dispatcher. */
 static int is_strict_number(const char *s, size_t n) {
@@ -240,12 +243,50 @@ static int is_strict_number(const char *s, size_t n) {
     } else {
         return 0;
     }
-    if (k == rn) return 1;                /* pure integer                        */
-    if (r[k] != '.') return 0;            /* trailing junk (e.g. 08, 0x, 0b)     */
-    k++;                                  /* consume '.'                         */
-    if (k == rn) return 0;               /* "1." needs a fractional digit       */
-    while (k < rn && isdigit((unsigned char)r[k])) k++;
-    return k == rn;                       /* reject e.g. 1.2.3                   */
+    if (k < rn && r[k] == '.') {          /* optional fraction                   */
+        k++;
+        if (k == rn || !isdigit((unsigned char)r[k])) return 0;  /* "1." */
+        while (k < rn && isdigit((unsigned char)r[k])) k++;
+    }
+    if (k < rn && (r[k] == 'e' || r[k] == 'E')) {   /* optional exponent         */
+        k++;
+        if (k < rn && (r[k] == '+' || r[k] == '-')) k++;
+        if (k == rn || !isdigit((unsigned char)r[k])) return 0;  /* "1e", "1e+" */
+        while (k < rn && isdigit((unsigned char)r[k])) k++;
+    }
+    return k == rn;                       /* reject trailing junk (08, 1.2.3)    */
+}
+
+/* Does the run at `start` (length `len`) carry a hex or binary prefix?
+   Such a literal never takes an exponent -- 'e' is a hex digit. */
+static int has_radix_prefix(const char *start, size_t len) {
+    const char *p = start;
+    size_t n = len;
+    if (n > 0 && *p == '-') { p++; n--; }
+    return n >= 2 && p[0] == '0'
+        && (p[1] == 'x' || p[1] == 'X' || p[1] == 'b' || p[1] == 'B');
+}
+
+/* Scan one numeric-or-label run.  It is a maximal run of labelchars, extended
+   across an exponent sign: '+' and '-' are not labelchars, so a plain run
+   would stop before the sign in 1.5e-5 and leave "-5" as a separate token.
+   The shape <e|E><+|-><digit> cannot occur otherwise, so it is consumed as
+   part of the same token -- except after a hex/bin prefix, where 'e' is a
+   digit of the literal and 0x1e-5 must not swallow the '-'. */
+static void scan_number_run(Lexer *lex, const char *start) {
+    for (;;) {
+        while (!lex_eof(lex) && is_label_char(lex_peek(lex)))
+            lex_advance(lex);
+        size_t len = (size_t)(lex->src + lex->pos - start);
+        if (len == 0 || has_radix_prefix(start, len)) break;
+        char last = start[len - 1];
+        if (last != 'e' && last != 'E')            break;
+        if (lex_remaining(lex) < 2)                break;
+        char sign = (char)lex_peek(lex);
+        if (sign != '+' && sign != '-')            break;
+        if (!isdigit((unsigned char)lex->src[lex->pos + 1])) break;
+        lex_advance(lex);   /* consume the sign; its digits continue the run */
+    }
 }
 
 /* Digit-led token: scan the maximal labelchar run, then classify.  A run that
@@ -254,8 +295,7 @@ static int is_strict_number(const char *s, size_t n) {
 static Token lex_number_or_label(Lexer *lex) {
     int line = lex->line, col = lex->col;
     const char *start = lex->src + lex->pos;
-    while (!lex_eof(lex) && is_label_char(lex_peek(lex)))
-        lex_advance(lex);
+    scan_number_run(lex, start);
     size_t len = (size_t)(lex->src + lex->pos - start);
     return make_token(is_strict_number(start, len) ? TOK_NUMBER : TOK_LABEL,
                       start, len, line, col);
@@ -268,8 +308,7 @@ static Token lex_signed_number(Lexer *lex) {
     int line = lex->line, col = lex->col;
     const char *start = lex->src + lex->pos;
     lex_advance(lex);                     /* consume '-' */
-    while (!lex_eof(lex) && is_label_char(lex_peek(lex)))
-        lex_advance(lex);
+    scan_number_run(lex, start);
     size_t len = (size_t)(lex->src + lex->pos - start);
     if (is_strict_number(start, len))
         return make_token(TOK_NUMBER, start, len, line, col);
