@@ -127,6 +127,16 @@ int main(void) {
     check("multiline str",    "{a: \"\"\"line\nline\"\"\"}");
     check("quoted key",       "{\"a b\": 1}");
 
+    /* Quote-run rule.  These were added after a published Pasta and a published
+       Basta drifted on exactly this and the check did not notice -- it only
+       covers the cases it enumerates, so a new grammar rule needs a case here
+       or the alarm is silent about it. */
+    check("quote in string",  "{a: \"\"\"said \"hi\" today\"\"\"}");
+    check("ends with quote",  "{a: \"\"\"ends q\"\"\"\"}");
+    check("lone quote",       "{a: \"\"\"\"\"\"\"}");
+    check("two at end",       "{a: \"\"\"two\"\"\"\"\"}");
+    check("interior triple",  "{a: \"\"\"a \"\"\" b\"\"\"}");
+
     printf("\n=== comments (all three forms are `blank`) ===\n");
     check("; preamble",       "; hdr\n{a:1}");
     check("; inline",         "{a:1 ; note\n}");
