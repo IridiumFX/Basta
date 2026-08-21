@@ -51,7 +51,18 @@ void                : "null" ;
    Because 0x00 is only dispatched when the lexer is in value-start
    position, a zero byte that appears inside an already-open string
    scan cannot be mistaken for a blob sentinel: the string scanner
-   runs in a separate mode and never invokes the value dispatch. *)
+   runs in a separate mode and never invokes the value dispatch.
+
+   A blob is also the right home for a value that is not text at all: captured
+   process output, a compiler diagnostic echoing the source line it complains
+   about, anything that may carry a NUL byte or bytes that are not valid UTF-8.
+   No string form can hold those.  A delimiter rule can be extended to cope
+   with quotes -- see the multiline rule below -- but nothing it does helps
+   with 0x00, and the one limit that rule leaves (a run of three or more quotes
+   in mid-content) is reached exactly by a compiler quoting a Java text block
+   or a Rust raw string.  If a value is bytes rather than authored text, make
+   it a blob and the question does not arise. *)
+
 blob                : NUL , uint64be , { byte } ;
 NUL                 : 0x00 ;
 uint64be            : byte , byte , byte , byte , byte , byte , byte , byte ;
