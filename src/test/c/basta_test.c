@@ -1600,6 +1600,92 @@ static void test_number_strictness(void) {
     basta_free(v);
 }
 
+/* Round-trip property, mirroring Pasta's test_writer_parser_agreement.  The
+   invariant is not "everything writes" but "whatever is written reads back":
+   refusing an unrepresentable value passes; emitting one that fails on read
+   does not.  Checked as a fixed point -- write, parse, write again, compare --
+   which needs no deep-compare helper and catches a writer and a lexer that
+   ship together and still disagree. */
+static void bt_rt(const char *label, BastaValue *v) {
+    BastaValue *m = basta_new_map();
+    basta_set(m, "v", v);                 /* takes ownership of v */
+    size_t l1; char *s1 = basta_write(m, BASTA_COMPACT, &l1);
+    if (!s1) {
+        printf("  [%-24s] write refused (unrepresentable)\n", label);
+        CHECK(1);                          /* refusing is the correct outcome */
+        basta_free(m);
+        return;
+    }
+    BastaResult r;
+    BastaValue *back = basta_parse(s1, l1, &r);
+    size_t l2; char *s2 = back ? basta_write(back, BASTA_COMPACT, &l2) : NULL;
+    int ok = back && r.code == BASTA_OK && s2 && l1 == l2 && memcmp(s1, s2, l1) == 0;
+    printf("  [%-24s] %s\n", label, ok ? "round-trips" : "MISMATCH");
+    CHECK(ok);
+    free(s1); free(s2); basta_free(m); basta_free(back);
+}
+
+static void test_writer_parser_agreement(void) {
+    SECTION("writer/parser agreement (round-trip property)");
+
+    bt_rt("plain",           basta_new_string("no quotes here"));
+    bt_rt("quote inside",    basta_new_string("a \" b"));
+    bt_rt("quote then text", basta_new_string("said \"hi\" today"));
+    bt_rt("leading quote",   basta_new_string("\"leading"));
+    bt_rt("newline",         basta_new_string("line one\nline two"));
+    bt_rt("quote + newline", basta_new_string("a \" and\na newline"));
+    bt_rt("backslash",       basta_new_string("C:\\path\\to\\file"));
+    bt_rt("tab and cr",      basta_new_string("col\tone\r\ncol\ttwo"));
+    bt_rt("empty",           basta_new_string(""));
+    /* Unrepresentable: must refuse, never corrupt. */
+    bt_rt("ends with quote", basta_new_string("ends with a quote\""));
+    bt_rt("lone quote",      basta_new_string("\""));
+    bt_rt("contains triple", basta_new_string("has \"\"\" inside"));
+
+    bt_rt("int",             basta_new_number(42));
+    bt_rt("decimal",         basta_new_number(0.15));
+    bt_rt("big exponent",    basta_new_number(6.02214076e23));
+    bt_rt("small exponent",  basta_new_number(1.5e-5));
+    bt_rt("DBL_MIN",         basta_new_number(2.2250738585072014e-308));
+    bt_rt("subnormal",       basta_new_number(5e-324));
+
+    bt_rt("bool",            basta_new_bool(1));
+    bt_rt("null",            basta_new_null());
+    bt_rt("label",           basta_new_label("some.label"));
+
+    /* Blobs are Basta's own value kind and must survive the same round trip,
+       including payloads made entirely of quote bytes. */
+    {
+        uint8_t q[] = { '"', '"', '"', '"' };
+        bt_rt("blob of quotes", basta_new_blob(q, sizeof q));
+        uint8_t z[] = { 0x00, 0xFF, 0x0A, 0x22 };
+        bt_rt("blob with NUL",  basta_new_blob(z, sizeof z));
+    }
+}
+
+/* Keys have no multiline form, so a key carrying a quote cannot be written at
+   all; the writer must refuse rather than emit {"a"b": 1}. */
+static void test_write_key_quotes(void) {
+    SECTION("writer: keys containing quotes");
+    struct { const char *key; int writable; } k[] = {
+        { "plain", 1 }, { "a b", 1 }, { "a.b", 1 }, { "a\"b", 0 }, { "ab\"", 0 },
+    };
+    for (size_t i = 0; i < sizeof k / sizeof *k; i++) {
+        BastaValue *m = basta_new_map();
+        basta_set(m, k[i].key, basta_new_number(1));
+        size_t len; char *s = basta_write(m, BASTA_COMPACT, &len);
+        if (k[i].writable) {
+            BastaResult r;
+            BastaValue *back = s ? basta_parse(s, len, &r) : NULL;
+            CHECK(back && basta_map_get(back, k[i].key));
+            basta_free(back);
+        } else {
+            CHECK(s == NULL);
+        }
+        free(s); basta_free(m);
+    }
+}
+
 int main(void) {
     printf("Basta test suite\n");
 
@@ -1636,6 +1722,8 @@ int main(void) {
     test_dot_in_labels();
     test_c_style_comments();
     test_write_shortest_decimal();
+    test_writer_parser_agreement();
+    test_write_key_quotes();
     test_atom_labels();
     test_atom_labels_edges();
     test_number_strictness();

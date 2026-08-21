@@ -102,9 +102,14 @@ static int is_bare_label(const char *s) {
 
 static int write_label(Buf *b, const char *key) {
     if (is_bare_label(key)) return buf_puts(b, key);
-    if (buf_putc(b, '"'))   return -1;
-    if (buf_puts(b, key))   return -1;
-    if (buf_putc(b, '"'))   return -1;
+    /* Quoted label.  Unlike a string value there is no multiline form for a
+       label, and there are no escape sequences, so a key containing a quote
+       cannot be represented at all: refuse rather than emit {"a"b": 1}, which
+       does not parse back. */
+    if (strchr(key, '"')) return -1;
+    if (buf_putc(b, '"')) return -1;
+    if (buf_puts(b, key)) return -1;
+    if (buf_putc(b, '"')) return -1;
     return 0;
 }
 
@@ -118,15 +123,40 @@ static int has_newline(const char *s, size_t len) {
     return 0;
 }
 
+static int has_quote(const char *s, size_t len) {
+    for (size_t i = 0; i < len; i++)
+        if (s[i] == '"') return 1;
+    return 0;
+}
+
+/* Some content no string form can carry, there being no escape sequences:
+   the multiline form ends at the first """, so content containing """ closes
+   early, and content ending in " turns the closing delimiter into """" which
+   also closes early and leaves a stray quote behind.  The simple form cannot
+   hold a " at all -- " is not a stringchar. */
+static int string_is_representable(const char *s, size_t len) {
+    if (len > 0 && s[len - 1] == '"') return 0;
+    for (size_t i = 0; i + 2 < len; i++)
+        if (s[i] == '"' && s[i + 1] == '"' && s[i + 2] == '"') return 0;
+    return 1;
+}
+
 static int write_string(Buf *b, const char *s, size_t len) {
-    if (has_newline(s, len)) {
-        if (buf_puts(b, "\"\"\""))     return -1;
-        if (buf_append(b, s, len))     return -1;
-        if (buf_puts(b, "\"\"\""))     return -1;
+    /* The multiline form is required for a newline, and equally for an
+       embedded quote: " is not a stringchar, so the simple form would end the
+       token at the first one and emit a document the parser cannot read back.
+       Content that no form can carry is refused rather than written as if it
+       could be -- returning -1 here makes the write fail instead of producing
+       a corrupt document that only fails later, on read. */
+    if (has_newline(s, len) || has_quote(s, len)) {
+        if (!string_is_representable(s, len)) return -1;
+        if (buf_puts(b, "\"\"\"")) return -1;
+        if (buf_append(b, s, len)) return -1;
+        if (buf_puts(b, "\"\"\"")) return -1;
     } else {
-        if (buf_putc(b, '"'))          return -1;
-        if (buf_append(b, s, len))     return -1;
-        if (buf_putc(b, '"'))          return -1;
+        if (buf_putc(b, '"')) return -1;
+        if (buf_append(b, s, len)) return -1;
+        if (buf_putc(b, '"')) return -1;
     }
     return 0;
 }
