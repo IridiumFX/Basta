@@ -104,7 +104,33 @@ quoted-label        : "\"" , { stringchar } , "\"" ;
 
 string              : simple-string | multiline-string ;
 simple-string       : "\"" , { stringchar } , "\"" ;
-multiline-string    : "\"\"\"" , { anychar-but-triple-quote } , "\"\"\"" ;
+multiline-string    : "\"\"\"" , { anychar } , "\"\"\"" ;
+
+(* STRINGS ARE RAW.  There are no escape sequences anywhere in the format: a
+   backslash is an ordinary character, so a Windows path or a regular
+   expression is written exactly as it appears.  The multiline form is the
+   escape hatch, and it is a raw one.
+
+   A quote is not a stringchar, so a simple-string cannot contain one at all;
+   content carrying a quote must use the multiline form, and a writer must
+   select it rather than emit "a " b", which does not read back.
+
+   MULTILINE DELIMITER RULE.  The body ends at the first run of three or more
+   consecutive quotes.  Where that run is longer than three, only its final
+   three are the closing delimiter and the extra quotes belong to the content
+   -- which is how content ending in a quote is written, by letting the
+   trailing quotes merge with the delimiter:
+
+       """ends with a quote""""     ->  ends with a quote"
+       """three at end""""""        ->  three at end"""
+       """""""                      ->  "        (seven quotes)
+
+   A run of one or two quotes is ordinary content, so """a "" b""" is  a "" b .
+
+   The one limit this leaves: a run of three or more quotes may appear only at
+   the END of the content.  One in the middle terminates the string early, so
+   content such as  a """ b  cannot be represented at all, and a writer must
+   refuse it rather than emit a document that will not read back. *)
 
 boolean             : "true" | "false" ;
 number              : float-constant | hex-number | bin-number

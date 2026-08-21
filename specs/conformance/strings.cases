@@ -1,0 +1,51 @@
+; ====================================================================
+; strings.cases
+; Conformance corpus for the Pasta / Basta STRING grammar.
+;
+; Strings are raw -- there are no escape sequences anywhere in the format.
+; The multiline form is the escape hatch, and it is a raw one: its body ends
+; at the first run of three or more quotes, and where that run is longer than
+; three, only the final three close the string and the extras belong to the
+; content.  See ../Basta.txt (STRINGS ARE RAW / MULTILINE DELIMITER RULE).
+;
+; FORMAT / FINGERPRINT are identical to atom-labels.cases; see that file.
+; In <input>, \n means a newline and \ a literal backslash.
+; ====================================================================
+
+; --- simple form ------------------------------------------------------
+> {d: "plain"}
+= {d=str:plain}
+> {d: ""}
+= {d=str:}
+> {d: "C:\path\to\file"}
+= {d=str:C:\path\to\file}
+
+; --- a quote needs the multiline form ---------------------------------
+> {d: """a " b"""}
+= {d=str:a " b}
+> {d: """said "hi" today"""}
+= {d=str:said "hi" today}
+> {d: """"leading"""}
+= {d=str:"leading}
+
+; --- quote-run rule: extras in the closing run are content ------------
+> {d: """a"""}
+= {d=str:a}
+> {d: """ends q""""}
+= {d=str:ends q"}
+> {d: """two"""""}
+= {d=str:two""}
+> {d: """"""""}
+= {d=str:""}
+> {d: """a "" b"""}
+= {d=str:a "" b}
+
+; --- newlines ---------------------------------------------------------
+> {d: """line one\nline two"""}
+= {d=str:line one\nline two}
+
+; --- malformed --------------------------------------------------------
+> {d: "unterminated}
+= ERR
+> {d: """unterminated}
+= ERR

@@ -102,6 +102,7 @@ int main(int argc, char **argv) {
             char expected[512];
             snprintf(expected, sizeof(expected), "%s", line + 2);
             rstrip(expected);
+            unescape(expected);   /* same escapes as the input line */
             if (!have_input) { fprintf(stderr, "corpus error: '=' with no preceding '>'\n"); continue; }
             have_input = 0;
             total++;

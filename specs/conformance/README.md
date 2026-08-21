@@ -15,8 +15,9 @@ implementation can self-check against the same cases.
 
 | File | What it is |
 |---|---|
-| `atom-labels.cases` | Label / atom grammar: `input → expected structural fingerprint`. 79 cases. |
+| `atom-labels.cases` | Label / atom grammar: `input → expected structural fingerprint`. 91 cases. |
 | `comments.cases` | Comment grammar (`;`, `//`, `/* */`). 16 cases. |
+| `strings.cases` | String grammar: raw strings and the multiline quote-run rule. 14 cases. |
 | `run_conformance.c` | Reference runner (public Basta API only). Proves the reference implementation matches the corpora, and serves as a worked example for other runners. |
 | `superset_check.c` | Executable check of the superset claim — parses the same inputs with *both* libraries and compares. |
 
@@ -38,7 +39,7 @@ gcc -std=c11 -DPASTA_STATIC -DBASTA_STATIC -I../../../Pasta/src/main/h -I../../s
 Expected tail (exit status 0):
 
 ```
-  OK=24  BROKEN=0  EXT=0
+  OK=27  BROKEN=0  EXT=0
   PASS: identical text language; blob is the only difference.
 ```
 
@@ -58,8 +59,9 @@ Each case is two consecutive content lines:
 = <fingerprint>    the expected structural fingerprint, or ERR
 ```
 
-Within `<input>`, `\n` means a newline and `\\` a literal backslash — a case can
-therefore span lines, which line comments need. No other escape is recognised.
+Within `<input>` **and** `<fingerprint>` alike, `\n` means a newline and `\\` a
+literal backslash, so a case can span lines — which line comments and multiline
+strings both need. No other escape is recognised.
 
 The **fingerprint** is a serializer-independent encoding of the parse tree:
 
@@ -85,6 +87,10 @@ strings and labels with their text, a binary blob as `blob`.
 - All three comment forms (`;`, `//`, `/* */`) as `blank`; that delimiters inside
   strings are data, not comments (`"http://x/y"`); and that an unterminated block
   comment or a lone `/` is an error.
+- Strings are raw -- no escape sequences, so a backslash is an ordinary
+  character -- and the multiline quote-run rule: the body ends at the first run
+  of three or more quotes, and extras in that run are content, which is how
+  content ending in a quote is written.
 
 Blob values are binary and cannot live in this text corpus. The `blob`
 fingerprint kind exists for completeness; blob semantics are exercised directly
@@ -104,14 +110,15 @@ gcc -std=c11 -DBASTA_STATIC -I../../src/main/h -I../../src/main/c run_conformanc
 Then run each corpus:
 
 ```bash
-./run_conformance atom-labels.cases && ./run_conformance comments.cases
+./run_conformance atom-labels.cases && ./run_conformance comments.cases && ./run_conformance strings.cases
 ```
 
 Expected tails:
 
 ```
-conformance: 79/79 passed
+conformance: 91/91 passed
 conformance: 16/16 passed
+conformance: 14/14 passed
 ```
 
 Exit status is `0` iff every case matches.

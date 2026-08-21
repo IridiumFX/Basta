@@ -129,15 +129,19 @@ static int has_quote(const char *s, size_t len) {
     return 0;
 }
 
-/* Some content no string form can carry, there being no escape sequences:
-   the multiline form ends at the first """, so content containing """ closes
-   early, and content ending in " turns the closing delimiter into """" which
-   also closes early and leaves a stray quote behind.  The simple form cannot
-   hold a " at all -- " is not a stringchar. */
+/* A run of three or more quotes ends the multiline form, so such a run may
+   appear only as a SUFFIX of the content -- there it merges with the closing
+   delimiter and the extra quotes are absorbed.  A run of three or more
+   anywhere else would terminate the string early, and with no escape
+   sequences to fall back on that content cannot be represented at all. */
 static int string_is_representable(const char *s, size_t len) {
-    if (len > 0 && s[len - 1] == '"') return 0;
-    for (size_t i = 0; i + 2 < len; i++)
-        if (s[i] == '"' && s[i + 1] == '"' && s[i + 2] == '"') return 0;
+    for (size_t i = 0; i < len; ) {
+        if (s[i] != '"') { i++; continue; }
+        size_t run = 0;
+        while (i + run < len && s[i + run] == '"') run++;
+        if (run >= 3 && i + run != len) return 0;
+        i += run;
+    }
     return 1;
 }
 

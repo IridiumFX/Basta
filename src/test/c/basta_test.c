@@ -1637,10 +1637,11 @@ static void test_writer_parser_agreement(void) {
     bt_rt("backslash",       basta_new_string("C:\\path\\to\\file"));
     bt_rt("tab and cr",      basta_new_string("col\tone\r\ncol\ttwo"));
     bt_rt("empty",           basta_new_string(""));
-    /* Unrepresentable: must refuse, never corrupt. */
+    /* Trailing quote runs merge with the delimiter, so these round-trip. */
     bt_rt("ends with quote", basta_new_string("ends with a quote\""));
     bt_rt("lone quote",      basta_new_string("\""));
-    bt_rt("contains triple", basta_new_string("has \"\"\" inside"));
+    /* Unrepresentable: an interior run of 3+ must refuse, never corrupt. */
+    bt_rt("interior triple", basta_new_string("has \"\"\" inside"));
 
     bt_rt("int",             basta_new_number(42));
     bt_rt("decimal",         basta_new_number(0.15));
@@ -1686,6 +1687,53 @@ static void test_write_key_quotes(void) {
     }
 }
 
+/* Quote-run rule, mirroring Pasta's test_multiline_quote_runs: a multiline
+   string ends at the first run of three or more quotes, and extras in that
+   run belong to the content -- which is what lets content ending in a quote
+   be written.  An interior run of three or more still terminates early. */
+static void test_multiline_quote_runs(void) {
+    SECTION("multiline strings: quote-run rule");
+    BastaResult r;
+
+    struct { const char *doc, *want; } p[] = {
+        { "{d: \"\"\"a\"\"\"}",             "a"          },
+        { "{d: \"\"\"ends q\"\"\"\"}",      "ends q\""   },
+        { "{d: \"\"\"two\"\"\"\"\"}",       "two\"\""    },
+        { "{d: \"\"\"\"\"\"\"}",            "\""         },
+        { "{d: \"\"\"a \"\" b\"\"\"}",      "a \"\" b"   },
+    };
+    for (size_t i = 0; i < sizeof p / sizeof *p; i++) {
+        BastaValue *v = basta_parse_cstr(p[i].doc, &r);
+        const BastaValue *x = v ? basta_map_get(v, "d") : NULL;
+        CHECK(x && basta_type(x) == BASTA_STRING);
+        CHECK(x && strcmp(basta_get_string(x), p[i].want) == 0);
+        basta_free(v);
+    }
+
+    struct { const char *val; int writable; } w[] = {
+        { "ends with a quote\"",    1 },
+        { "\"",                     1 },
+        { "ends with three\"\"\"",  1 },
+        { "a \"\"\" b",             0 },
+        { "\"\"\" leading",         0 },
+    };
+    for (size_t i = 0; i < sizeof w / sizeof *w; i++) {
+        BastaValue *m = basta_new_map();
+        basta_set(m, "d", basta_new_string(w[i].val));
+        size_t len; char *s = basta_write(m, BASTA_COMPACT, &len);
+        if (w[i].writable) {
+            BastaValue *b = s ? basta_parse(s, len, &r) : NULL;
+            const BastaValue *x = b ? basta_map_get(b, "d") : NULL;
+            CHECK(s && x && basta_type(x) == BASTA_STRING
+                  && strcmp(basta_get_string(x), w[i].val) == 0);
+            basta_free(b);
+        } else {
+            CHECK(s == NULL);
+        }
+        free(s); basta_free(m);
+    }
+}
+
 int main(void) {
     printf("Basta test suite\n");
 
@@ -1724,6 +1772,7 @@ int main(void) {
     test_write_shortest_decimal();
     test_writer_parser_agreement();
     test_write_key_quotes();
+    test_multiline_quote_runs();
     test_atom_labels();
     test_atom_labels_edges();
     test_number_strictness();

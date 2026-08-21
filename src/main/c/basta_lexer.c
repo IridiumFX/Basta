@@ -160,12 +160,23 @@ static Token lex_mstring(Lexer *lex) {
     /* consume opening """ */
     lex_advance(lex); lex_advance(lex); lex_advance(lex);
 
+    /* The body ends at the FIRST run of three or more quotes.  When that run
+       is longer than three only its final three close the string, and the
+       extra quotes belong to the content -- which is how a string ending in a
+       quote is written: the trailing quote merges with the delimiter.  A run
+       of one or two quotes is ordinary content.  Strings stay raw; there are
+       no escape sequences. */
     while (!lex_eof(lex)) {
-        if (lex_peek(lex) == '"' && lex_remaining(lex) >= 3
-            && lex->src[lex->pos + 1] == '"' && lex->src[lex->pos + 2] == '"') {
-            lex_advance(lex); lex_advance(lex); lex_advance(lex);
-            size_t len = (size_t)(lex->src + lex->pos - start);
-            return make_token(TOK_MSTRING, start, len, start_line, start_col);
+        if (lex_peek(lex) == '"') {
+            size_t run = 0;
+            while (lex->pos + run < lex->src_len
+                   && lex->src[lex->pos + run] == '"') run++;
+            for (size_t i = 0; i < run; i++) lex_advance(lex);
+            if (run >= 3) {
+                size_t len = (size_t)(lex->src + lex->pos - start);
+                return make_token(TOK_MSTRING, start, len, start_line, start_col);
+            }
+            continue;
         }
         lex_advance(lex);
     }
