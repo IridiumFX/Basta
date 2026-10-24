@@ -17,6 +17,11 @@
   #define BASTA_API __attribute__((visibility("default")))
 #endif
 
+/* Capability: this header's value model includes BASTA_BLOB.
+   Consumers that may run on Pasta or Basta should key off this rather than
+   infer it from a build flag.  Pasta's header defines PASTA_HAS_BLOB 0. */
+#define BASTA_HAS_BLOB 1
+
 #ifdef __cplusplus
 extern "C" {
 #endif
