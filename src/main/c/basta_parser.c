@@ -99,44 +99,51 @@ static BastaValue *parse_value(Parser *p);
 /*  Literal decoders                                                   */
 /* ------------------------------------------------------------------ */
 
-static double parse_number_literal(const char *start, size_t len, uint8_t *out_fmt) {
-    *out_fmt = BASTA_NUM_DEC;
-
-    if (len == 3 && memcmp(start, "Inf",  3) == 0)  return INFINITY;
-    if (len == 4 && memcmp(start, "-Inf", 4) == 0)  return -INFINITY;
-    if (len == 3 && memcmp(start, "NaN",  3) == 0)  return NAN;
-
-    const char *p = start;
-    int neg = 0;
-    if (*p == '-') { neg = 1; p++; }
-    size_t digits_len = len - (size_t)(p - start);
-
-    if (digits_len >= 3 && p[0] == '0' && (p[1] == 'x' || p[1] == 'X')) {
-        *out_fmt = BASTA_NUM_HEX;
-        unsigned long long v = 0;
-        for (size_t i = 2; i < digits_len; i++) {
-            unsigned d;
-            if (p[i] >= '0' && p[i] <= '9')      d = (unsigned)(p[i] - '0');
-            else if (p[i] >= 'a' && p[i] <= 'f') d = (unsigned)(p[i] - 'a' + 10);
-            else                                  d = (unsigned)(p[i] - 'A' + 10);
-            v = (v << 4) | d;
+static BastaValue *parse_number_literal
+(
+    Parser *parser
+)
+{
+    const char *start = parser->current.start;
+    size_t len = parser->current.len, at = start[0] == '-' ? 1 : 0;
+    int negative = at != 0, base = 10;
+    uint8_t fmt = BASTA_NUM_DEC;
+    if (len - at >= 3 && start[at] == '0')
+    {
+        if (start[at + 1] == 'x' || start[at + 1] == 'X') { base = 16; fmt = BASTA_NUM_HEX; at += 2; }
+        else if (start[at + 1] == 'b' || start[at + 1] == 'B') { base = 2; fmt = BASTA_NUM_BIN; at += 2; }
+    }
+    if (base == 10 && (start[at] == 'I' || start[at] == 'N'
+        || memchr(start, '.', len) || memchr(start, 'e', len) || memchr(start, 'E', len)))
+    {
+        /* Float tokens have no fixed text-length ceiling or silent truncation. */
+        if (len == SIZE_MAX) { parser_error_code(parser, BASTA_ERR_ALLOC, "number allocation overflow"); return NULL; }
+        char *text = (char *)malloc(len + 1);
+        if (!text) { parser_error_code(parser, BASTA_ERR_ALLOC, "allocation failed"); return NULL; }
+        memcpy(text, start, len); text[len] = 0;
+        double number = strtod(text, NULL);
+        free(text);
+        return basta_value_number_fmt(number, fmt);
+    }
+    uint64_t magnitude = 0;
+    uint64_t limit = negative ? (UINT64_C(1) << 63) : UINT64_MAX;
+    for (; at < len; at++)
+    {
+        unsigned char c = (unsigned char)start[at];
+        unsigned digit = c >= '0' && c <= '9' ? c - '0' : c >= 'a' && c <= 'f' ? c - 'a' + 10 : c - 'A' + 10;
+        if (digit >= (unsigned)base || magnitude > (limit - digit) / (unsigned)base)
+        {
+            parser_error_code(parser, BASTA_ERR_NUMBER_RANGE, "integer literal outside signed/unsigned 64-bit range");
+            return NULL;
         }
-        return neg ? -(double)(long long)v : (double)v;
+        magnitude = magnitude * (unsigned)base + digit;
     }
-
-    if (digits_len >= 3 && p[0] == '0' && (p[1] == 'b' || p[1] == 'B')) {
-        *out_fmt = BASTA_NUM_BIN;
-        unsigned long long v = 0;
-        for (size_t i = 2; i < digits_len; i++)
-            v = (v << 1) | (unsigned)(p[i] - '0');
-        return neg ? -(double)(long long)v : (double)v;
+    if (negative)
+    {
+        int64_t integer = magnitude == (UINT64_C(1) << 63) ? INT64_MIN : -(int64_t)magnitude;
+        return basta_new_int64_fmt(integer, fmt);
     }
-
-    char buf[64];
-    size_t n = len < sizeof(buf) - 1 ? len : sizeof(buf) - 1;
-    memcpy(buf, start, n);
-    buf[n] = '\0';
-    return strtod(buf, NULL);
+    return magnitude <= INT64_MAX ? basta_new_int64_fmt((int64_t)magnitude, fmt) : basta_new_uint64_fmt(magnitude, fmt);
 }
 
 static BastaValue *extract_string(const char *start, size_t len) {
@@ -264,10 +271,8 @@ static BastaValue *parse_value(Parser *p) {
             return v;
         }
         case TOK_NUMBER: {
-            uint8_t fmt;
-            double n = parse_number_literal(p->current.start, p->current.len, &fmt);
-            BastaValue *v = basta_value_number_fmt(n, fmt);
-            if (!v) parser_error(p, "allocation failed");
+            BastaValue *v = parse_number_literal(p);
+            if (!v) { if (!p->had_error) parser_error_code(p, BASTA_ERR_ALLOC, "allocation failed"); return NULL; }
             advance(p);
             return v;
         }

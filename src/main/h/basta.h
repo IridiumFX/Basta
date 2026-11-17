@@ -45,6 +45,16 @@ typedef enum {
 #define BASTA_NUM_HEX  1   /* 0x prefix */
 #define BASTA_NUM_BIN  2   /* 0b prefix */
 
+/* Number representation. Integer literals are not routed through double.
+   The value type remains BASTA_NUMBER for source/API compatibility. */
+#define BASTA_HAS_EXACT_INTEGERS 1
+typedef enum {
+    BASTA_NUMBER_NONE = -1,
+    BASTA_NUMBER_FLOAT = 0,
+    BASTA_NUMBER_INT64,
+    BASTA_NUMBER_UINT64
+} BastaNumberKind;
+
 /* Opaque value handle */
 typedef struct BastaValue BastaValue;
 
@@ -55,7 +65,8 @@ typedef enum {
     BASTA_ERR_SYNTAX,
     BASTA_ERR_UNEXPECTED_TOKEN,
     BASTA_ERR_UNEXPECTED_EOF,
-    BASTA_ERR_BLOB_TRUNCATED    /* sentinel found but size/data bytes missing */
+    BASTA_ERR_BLOB_TRUNCATED,   /* sentinel found but size/data bytes missing */
+    BASTA_ERR_NUMBER_RANGE
 } BastaError;
 
 /* Error info */
@@ -90,6 +101,13 @@ BASTA_API int          basta_is_null(const BastaValue *v);
 /* Scalars */
 BASTA_API int          basta_get_bool(const BastaValue *v);
 BASTA_API double       basta_get_number(const BastaValue *v);
+/* Legacy double getter converts exact integers and may round. Use the checked
+   integer getters for exact values. They return 0 on success, -1 for a wrong
+   kind/range or NULL output, leaving the output unchanged on failure.
+   Float-kind values are rejected, even when mathematically integral. */
+BASTA_API BastaNumberKind basta_get_number_kind(const BastaValue *v);
+BASTA_API int basta_get_int64(const BastaValue *v, int64_t *out);
+BASTA_API int basta_get_uint64(const BastaValue *v, uint64_t *out);
 BASTA_API int          basta_get_number_fmt(const BastaValue *v);
 BASTA_API const char  *basta_get_string(const BastaValue *v);
 BASTA_API size_t       basta_get_string_len(const BastaValue *v);
@@ -114,6 +132,10 @@ BASTA_API BastaValue *basta_new_null(void);
 BASTA_API BastaValue *basta_new_bool(int b);
 BASTA_API BastaValue *basta_new_number(double n);
 BASTA_API BastaValue *basta_new_number_fmt(double n, int fmt);
+BASTA_API BastaValue *basta_new_int64(int64_t n);
+BASTA_API BastaValue *basta_new_uint64(uint64_t n);
+BASTA_API BastaValue *basta_new_int64_fmt(int64_t n, int fmt);
+BASTA_API BastaValue *basta_new_uint64_fmt(uint64_t n, int fmt);
 BASTA_API BastaValue *basta_new_string(const char *s);
 BASTA_API BastaValue *basta_new_string_len(const char *s, size_t len);
 BASTA_API BastaValue *basta_new_label(const char *s);

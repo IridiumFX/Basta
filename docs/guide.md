@@ -594,3 +594,53 @@ or truncating at embedded `0x00` bytes.
 
 The `basta_write_fp` function uses `fwrite` instead of `fputs` precisely
 for this reason.
+
+
+## Exact 64-bit integers (C API)
+
+Integer literals without a decimal point or exponent are stored exactly, including
+decimal, hexadecimal and binary spellings. Negative values must fit `int64_t`;
+nonnegative values may use the full `uint64_t` range. Parsed nonnegative values
+up to `INT64_MAX` use the signed representation; larger ones use unsigned.
+`BASTA_NUMBER` remains the value type. All existing value/error enum codes stay
+unchanged; the new `BASTA_ERR_NUMBER_RANGE` is appended.
+
+The parser rejects an out-of-range integer rather than rounding it or wrapping.
+For example, `18446744073709551615` is exact, while `18446744073709551616` reports
+`BASTA_ERR_NUMBER_RANGE`. An explicit decimal point or exponent, such as
+`18446744073709551616.0` or `1e30`, requests the existing floating-point behavior.
+This is the C implementation's range policy; it does not remove integer syntax
+from the format grammar or impose a token-length ceiling. Inf/NaN and existing
+floating-point APIs remain available. A decimal integer `-0` has integer value0.
+
+```c
+BastaResult result;
+BastaValue *document = basta_parse_cstr("{size:18446744073709551615}", &result);
+uint64_t size;
+if (document && !basta_get_uint64(basta_map_get(document, "size"), &size)) {
+    /* size == UINT64_MAX, with no double conversion */
+}
+basta_free(document);
+```
+
+`basta_get_number_kind` returns `BASTA_NUMBER_INT64`, `BASTA_NUMBER_UINT64`,
+`BASTA_NUMBER_FLOAT`, or `BASTA_NUMBER_NONE` for a non-number/NULL value.
+`basta_get_int64` and `basta_get_uint64` return0 on success and -1 for a wrong
+kind, incompatible range, or NULL output. They leave the output unchanged on
+failure. Cross-reading a representable integer is allowed; float-kind values
+are rejected even when mathematically integral. Fractional/exponent spelling
+therefore differs from integer spelling for these checked accessors.
+
+Use `basta_new_int64` / `basta_new_uint64` to construct exact values, or their
+`_fmt` variants with `BASTA_NUM_DEC`, `BASTA_NUM_HEX`, or `BASTA_NUM_BIN`.
+Integer writers handle every signed/unsigned boundary, including `INT64_MIN`,
+and retain the requested base. The parser chooses representation from the
+literal's sign/range, so a small unsigned builder may parse back as signed;
+both checked accessors preserve its exact value.
+
+`basta_new_number`, `basta_new_number_fmt` and `basta_get_number` keep their
+double-valued signatures. The legacy getter explicitly converts integer values
+and can round large ones: use the checked accessors when exactness matters.
+The legacy double writer can emit an integral spelling, which parses back as
+an integer representation. The public value type still remains NUMBER.
+`BASTA_HAS_EXACT_INTEGERS` advertises availability of this additive API.

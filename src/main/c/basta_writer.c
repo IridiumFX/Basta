@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <ctype.h>
 #include <float.h>
+#include <inttypes.h>
 
 /* DBL_DECIMAL_DIG is C11; fall back to the binary64 value if a toolchain
    predates it.  The macro is preferred because 17 is correct for IEEE 754
@@ -169,12 +170,39 @@ static int write_string(Buf *b, const char *s, size_t len) {
 /*  Number formatting                                                  */
 /* ------------------------------------------------------------------ */
 
+static int write_integer
+(
+    Buf *b
+    , const BastaValue *v
+)
+{
+    int negative = v->num_kind == BASTA_NUMBER_INT64 && v->as.integer < 0;
+    uint64_t magnitude = v->num_kind == BASTA_NUMBER_UINT64 ? v->as.unsigned_integer
+        : negative ? (uint64_t)(-(v->as.integer + 1)) + 1 : (uint64_t)v->as.integer;
+    char text[65];
+    if (negative && buf_putc(b, '-')) return -1;
+    if (v->num_fmt == BASTA_NUM_HEX)
+    {
+        snprintf(text, sizeof(text), "%" PRIx64, magnitude);
+        if (buf_puts(b, "0x")) return -1;
+    }
+    else if (v->num_fmt == BASTA_NUM_BIN)
+    {
+        size_t at = sizeof(text) - 1; text[at] = 0;
+        do { text[--at] = (char)('0' + (magnitude & 1)); magnitude >>= 1; } while (magnitude);
+        if (buf_puts(b, "0b")) return -1;
+        return buf_puts(b, text + at);
+    }
+    else snprintf(text, sizeof(text), "%" PRIu64, magnitude);
+    return buf_puts(b, text);
+}
+
 static int write_number(Buf *b, double n, uint8_t fmt) {
     char tmp[64];
     if (isnan(n))  return buf_puts(b, "NaN");
     if (isinf(n))  return buf_puts(b, n < 0 ? "-Inf" : "Inf");
 
-    int is_int = (n == (long long)n && n >= -1e15 && n <= 1e15);
+    int is_int = (n >= -1e15 && n <= 1e15 && n == (long long)n);
 
     if (fmt == BASTA_NUM_HEX && is_int) {
         long long iv = (long long)n;
@@ -341,7 +369,8 @@ static int write_value(Buf *b, const BastaValue *v, int compact, int sorted, int
     switch (v->type) {
     case BASTA_NULL:   return buf_puts(b, "null");
     case BASTA_BOOL:   return buf_puts(b, v->as.boolean ? "true" : "false");
-    case BASTA_NUMBER: return write_number(b, v->as.number, v->num_fmt);
+    case BASTA_NUMBER:
+        return v->num_kind == BASTA_NUMBER_FLOAT ? write_number(b, v->as.number, v->num_fmt) : write_integer(b, v);
     case BASTA_STRING: return write_string(b, v->as.string.data, v->as.string.len);
     case BASTA_LABEL:  return buf_append(b, v->as.string.data, v->as.string.len);
     case BASTA_ARRAY:  return write_array(b, v, compact, sorted, depth);

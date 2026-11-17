@@ -1734,7 +1734,130 @@ static void test_multiline_quote_runs(void) {
     }
 }
 
+#define INTEGER_ASSERT(condition, message) CHECK(condition)
+
+/* Exact integers stay NUMBER values, with additive checked accessors. The
+   legacy double getter remains intentionally converting for old consumers. */
+static void test_exact_integers(void)
+{
+    SECTION("Exact signed/unsigned 64-bit numbers");
+    static const struct
+    {
+        const char *literal;
+        uint64_t magnitude;
+        int negative, fmt;
+    } cases[] = {
+        { "0", 0, 0, BASTA_NUM_DEC },
+        { "9007199254740992", UINT64_C(9007199254740992), 0, BASTA_NUM_DEC },
+        { "9007199254740993", UINT64_C(9007199254740993), 0, BASTA_NUM_DEC },
+        { "-9007199254740993", UINT64_C(9007199254740993), 1, BASTA_NUM_DEC },
+        { "9223372036854775807", INT64_MAX, 0, BASTA_NUM_DEC },
+        { "-9223372036854775808", UINT64_C(1) << 63, 1, BASTA_NUM_DEC },
+        { "9223372036854775808", UINT64_C(1) << 63, 0, BASTA_NUM_DEC },
+        { "18446744073709551615", UINT64_MAX, 0, BASTA_NUM_DEC },
+        { "0x20000000000001", UINT64_C(9007199254740993), 0, BASTA_NUM_HEX },
+        { "-0x8000000000000000", UINT64_C(1) << 63, 1, BASTA_NUM_HEX },
+        { "0XFFFFFFFFFFFFFFFF", UINT64_MAX, 0, BASTA_NUM_HEX },
+        { "0b1111111111111111111111111111111111111111111111111111111111111111", UINT64_MAX, 0, BASTA_NUM_BIN },
+        { "-0b1000000000000000000000000000000000000000000000000000000000000000", UINT64_C(1) << 63, 1, BASTA_NUM_BIN }
+    };
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++)
+    {
+        char input[128]; snprintf(input, sizeof(input), "{n:%s}", cases[i].literal);
+        BastaResult result = { 0 };
+        BastaValue *value = basta_parse_cstr(input, &result);
+        INTEGER_ASSERT(value && result.code == BASTA_OK, "exact integer parses");
+        if (!value) continue;
+        const BastaValue *number = basta_map_get(value, "n");
+        INTEGER_ASSERT(basta_type(number) == BASTA_NUMBER, "old NUMBER type unchanged");
+        INTEGER_ASSERT(basta_get_number_fmt(number) == cases[i].fmt, "integer base retained");
+        int64_t signed_value = 19; uint64_t unsigned_value = 23;
+        int64_t expected = cases[i].negative ? (cases[i].magnitude == (UINT64_C(1) << 63) ? INT64_MIN : -(int64_t)cases[i].magnitude) : 0;
+        if (cases[i].negative)
+        {
+            INTEGER_ASSERT(basta_get_number_kind(number) == BASTA_NUMBER_INT64, "negative integer kind");
+            INTEGER_ASSERT(!basta_get_int64(number, &signed_value) && signed_value == expected, "negative exact value");
+            INTEGER_ASSERT(basta_get_uint64(number, &unsigned_value) == -1 && unsigned_value == 23, "negative to unsigned refuses untouched");
+        }
+        else
+        {
+            INTEGER_ASSERT(basta_get_number_kind(number) == (cases[i].magnitude <= INT64_MAX ? BASTA_NUMBER_INT64 : BASTA_NUMBER_UINT64), "positive integer kind");
+            INTEGER_ASSERT(!basta_get_uint64(number, &unsigned_value) && unsigned_value == cases[i].magnitude, "unsigned exact value");
+            if (cases[i].magnitude <= INT64_MAX) INTEGER_ASSERT(!basta_get_int64(number, &signed_value) && signed_value == (int64_t)cases[i].magnitude, "positive exact signed view");
+            else INTEGER_ASSERT(basta_get_int64(number, &signed_value) == -1 && signed_value == 19, "too large for signed refuses untouched");
+        }
+        size_t length = 0; char *wire = basta_write(value, BASTA_COMPACT, &length);
+        INTEGER_ASSERT(wire != NULL, "integer writes");
+        BastaValue *back = wire ? basta_parse(wire, length, &result) : NULL;
+        const BastaValue *back_number = basta_map_get(back, "n");
+        INTEGER_ASSERT(back != NULL, "integer output reparses");
+        if (cases[i].negative) INTEGER_ASSERT(!basta_get_int64(back_number, &signed_value) && signed_value == expected, "negative round trip exact");
+        else INTEGER_ASSERT(!basta_get_uint64(back_number, &unsigned_value) && unsigned_value == cases[i].magnitude, "unsigned round trip exact");
+        free(wire); basta_free(back); basta_free(value);
+    }
+    static const char *overflow[] = {
+        "18446744073709551616", "-9223372036854775809", "0x10000000000000000",
+        "-0x8000000000000001", "-0xffffffffffffffff",
+        "0b10000000000000000000000000000000000000000000000000000000000000000",
+        "999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999"
+    };
+    for (size_t i = 0; i < sizeof(overflow) / sizeof(overflow[0]); i++)
+    {
+        char input[160]; snprintf(input, sizeof(input), "{n:%s}", overflow[i]);
+        BastaResult result = { 0 }; BastaValue *value = basta_parse_cstr(input, &result);
+        INTEGER_ASSERT(!value && result.code == BASTA_ERR_NUMBER_RANGE, "integer overflow refuses instead of rounding/wrapping");
+        basta_free(value);
+    }
+    uint64_t random = UINT64_C(0x49de63a4b7c2851f);
+    for (int i = 0; i < 256; i++)
+    {
+        random ^= random << 13; random ^= random >> 7; random ^= random << 17;
+        int fmt = i % 3; BastaResult result = { 0 };
+        BastaValue *value = basta_new_map();
+        INTEGER_ASSERT(value && !basta_set(value, "n", basta_new_uint64_fmt(random, fmt)), "unsigned builder");
+        size_t length = 0; char *wire = basta_write(value, BASTA_COMPACT, &length);
+        BastaValue *back = wire ? basta_parse(wire, length, &result) : NULL;
+        uint64_t got = 0;
+        INTEGER_ASSERT(back && !basta_get_uint64(basta_map_get(back, "n"), &got) && got == random, "full-width unsigned builder/write/read");
+        free(wire); basta_free(back); basta_free(value);
+        int64_t signed_value = (int64_t)(random & INT64_MAX);
+        if (i & 1) signed_value = -signed_value;
+        value = basta_new_map();
+        INTEGER_ASSERT(value && !basta_set(value, "n", basta_new_int64_fmt(signed_value, fmt)), "signed builder");
+        wire = basta_write(value, BASTA_COMPACT, &length); back = wire ? basta_parse(wire, length, &result) : NULL;
+        int64_t signed_got = 0;
+        INTEGER_ASSERT(back && !basta_get_int64(basta_map_get(back, "n"), &signed_got) && signed_got == signed_value, "full-width signed builder/write/read");
+        free(wire); basta_free(back); basta_free(value);
+    }
+    BastaResult result = { 0 }; BastaValue *value = basta_parse_cstr("{n:18446744073709551616.0}", &result);
+    INTEGER_ASSERT(value && basta_get_number_kind(basta_map_get(value, "n")) == BASTA_NUMBER_FLOAT, "explicit fractional spelling remains floating point");
+    int64_t signed_value = 31; uint64_t unsigned_value = 37;
+    INTEGER_ASSERT(basta_get_int64(basta_map_get(value, "n"), &signed_value) == -1 && signed_value == 31, "float rejected by exact signed getter");
+    INTEGER_ASSERT(basta_get_uint64(basta_map_get(value, "n"), &unsigned_value) == -1 && unsigned_value == 37, "float rejected by exact unsigned getter");
+    basta_free(value);
+    value = basta_new_number(42.5);
+    INTEGER_ASSERT(basta_get_number_kind(value) == BASTA_NUMBER_FLOAT && basta_get_number(value) == 42.5, "legacy double constructor/getter retained");
+    INTEGER_ASSERT(basta_get_int64(value, NULL) == -1 && basta_get_uint64(value, NULL) == -1, "NULL outputs refuse");
+    basta_free(value);
+    value = basta_new_int64(INT64_MIN);
+    INTEGER_ASSERT(!basta_get_int64(value, &signed_value) && signed_value == INT64_MIN, "default signed constructor"); basta_free(value);
+    value = basta_new_uint64(UINT64_MAX);
+    INTEGER_ASSERT(!basta_get_uint64(value, &unsigned_value) && unsigned_value == UINT64_MAX, "default unsigned constructor"); basta_free(value);
+    INTEGER_ASSERT(basta_get_number_kind(NULL) == BASTA_NUMBER_NONE && basta_get_int64(NULL, &signed_value) == -1 && basta_get_uint64(NULL, &unsigned_value) == -1, "wrong/NULL values refuse");
+    value = basta_new_string("17");
+    INTEGER_ASSERT(basta_get_number_kind(value) == BASTA_NUMBER_NONE && basta_get_int64(value, &signed_value) == -1 && basta_get_uint64(value, &unsigned_value) == -1, "numeric-looking string is not an integer"); basta_free(value);
+    /* Long float spelling used to be silently truncated to a 63-byte basta. */
+    char long_float[256]; strcpy(long_float, "[0."); memset(long_float + 3, '0', 200); strcpy(long_float + 203, "123456789]");
+    value = basta_parse_cstr(long_float, &result);
+    INTEGER_ASSERT(value && basta_get_number(basta_array_get(value, 0)) == strtod(long_float + 1, NULL) && basta_get_number(basta_array_get(value, 0)) > 0, "full float lexeme consumed");
+    basta_free(value);
+
+}
+
+#undef INTEGER_ASSERT
+
 int main(void) {
+    test_exact_integers();
     printf("Basta test suite\n");
 
     test_text_only();

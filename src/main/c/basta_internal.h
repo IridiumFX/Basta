@@ -16,9 +16,12 @@ typedef struct BastaMember {
 struct BastaValue {
     BastaType type;
     uint8_t   num_fmt;   /* BASTA_NUM_DEC / _HEX / _BIN (0 for non-numbers) */
+    uint8_t   num_kind;  /* BASTA_NUMBER_FLOAT / _INT64 / _UINT64 */
     union {
         int     boolean;
         double  number;
+        int64_t integer;
+        uint64_t unsigned_integer;
         struct { char    *data; size_t len; } string;   /* STRING and LABEL */
         struct { uint8_t *data; size_t len; } blob;     /* BLOB */
         struct { BastaValue **items; size_t count; size_t cap; } array;
