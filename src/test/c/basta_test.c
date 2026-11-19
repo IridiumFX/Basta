@@ -4,6 +4,7 @@
 #include <string.h>
 #include <stdint.h>
 #include <assert.h>
+#include <math.h>
 
 /* ------------------------------------------------------------------ */
 /*  Test harness                                                       */
@@ -1309,6 +1310,11 @@ static void test_write_shortest_decimal(void) {
         { "0.5",     "0.5"     },
         { "-0.15",   "-0.15"   },
         { "100",     "100"     },
+        { "0.0",     "0"       },
+        { "-0.0",    "-0.0"    },   /* was 0: the sign was lost */
+        { "-0e0",    "-0.0"    },
+        { "-1e-400", "-0.0"    },   /* underflows to -0.0       */
+        { "-0",      "0"       },   /* an integer: no sign      */
         { "0x1f",    "0x1f"    },
         { "0b1010",  "0b1010"  },
     };
@@ -1649,6 +1655,24 @@ static void test_writer_parser_agreement(void) {
     bt_rt("small exponent",  basta_new_number(1.5e-5));
     bt_rt("DBL_MIN",         basta_new_number(2.2250738585072014e-308));
     bt_rt("subnormal",       basta_new_number(5e-324));
+
+    /* Negative zero, in every base hint.  bt_rt's fixed point cannot see a
+       lost sign (0 rewrites as 0), so the value read back is checked too. */
+    {
+        int fmts[] = { BASTA_NUM_DEC, BASTA_NUM_HEX, BASTA_NUM_BIN };
+        for (size_t i = 0; i < sizeof fmts / sizeof *fmts; i++) {
+            BastaValue *m = basta_new_map();
+            basta_set(m, "v", basta_new_number_fmt(-0.0, fmts[i]));
+            size_t len; char *s = basta_write(m, BASTA_COMPACT, &len);
+            BastaResult r;
+            BastaValue *back = s ? basta_parse(s, len, &r) : NULL;
+            const BastaValue *x = back ? basta_map_get(back, "v") : NULL;
+            printf("  [negative zero fmt %d    ] %s\n", fmts[i], s ? s : "(null)");
+            CHECK(x && basta_type(x) == BASTA_NUMBER
+                  && basta_get_number(x) == 0 && signbit(basta_get_number(x)));
+            free(s); basta_free(m); basta_free(back);
+        }
+    }
 
     bt_rt("bool",            basta_new_bool(1));
     bt_rt("null",            basta_new_null());

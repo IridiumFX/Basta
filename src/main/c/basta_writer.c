@@ -202,6 +202,11 @@ static int write_number(Buf *b, double n, uint8_t fmt) {
     if (isnan(n))  return buf_puts(b, "NaN");
     if (isinf(n))  return buf_puts(b, n < 0 ? "-Inf" : "Inf");
 
+    /* Negative zero has no integer spelling: "-0" (or -0x0) reads back as the
+       integer 0, which has no sign.  The "." keeps it floating, so the sign
+       survives.  Checked before hex/bin, which have no floating form. */
+    if (n == 0 && signbit(n)) return buf_puts(b, "-0.0");
+
     int is_int = (n >= -1e15 && n <= 1e15 && n == (long long)n);
 
     if (fmt == BASTA_NUM_HEX && is_int) {
