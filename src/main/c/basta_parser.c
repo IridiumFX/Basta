@@ -99,6 +99,53 @@ static BastaValue *parse_value(Parser *p);
 /*  Literal decoders                                                   */
 /* ------------------------------------------------------------------ */
 
+/* An integer literal past the signed/unsigned 64-bit range is still a valid
+   number by the grammar, so it is read rather than rejected: as the nearest
+   double, of kind BASTA_NUMBER_FLOAT.  The kind is the exactness flag.  The
+   checked integer getters refuse a FLOAT, so a consumer asking for an exact
+   value gets a failure, never a rounded one; the legacy double getter returns
+   the nearest value, as it always has. */
+static BastaValue *parse_wide_integer(Parser *parser, const char *start,
+                                      size_t len, size_t first, int base,
+                                      uint8_t fmt, int negative) {
+    double number;
+    if (base == 10) {
+        /* strtod rounds decimal correctly, and reads the sign itself. */
+        char *text = (char *)malloc(len + 1);
+        if (!text) {
+            parser_error_code(parser, BASTA_ERR_ALLOC, "allocation failed");
+            return NULL;
+        }
+        memcpy(text, start, len);
+        text[len] = '\0';
+        number = strtod(text, NULL);
+        free(text);
+    } else {
+        /* Hex and binary: keep the leading 61+ bits and fold every dropped
+           nonzero bit into the lowest one (a sticky bit), so converting that
+           head to double rounds exactly as the full value would.  This avoids
+           depending on strtod reading hex, which older C runtimes cannot. */
+        unsigned bits = base == 16 ? 4 : 1;
+        uint64_t head = 0;
+        int shift = 0, sticky = 0;
+        for (size_t i = first; i < len; i++) {
+            unsigned char c = (unsigned char)start[i];
+            unsigned digit = c >= '0' && c <= '9' ? (unsigned)(c - '0')
+                           : c >= 'a' && c <= 'f' ? (unsigned)(c - 'a' + 10)
+                           : (unsigned)(c - 'A' + 10);
+            if ((head >> (64 - bits)) == 0) {
+                head = (head << bits) | digit;
+            } else {
+                if (shift < 4096) shift += (int)bits;   /* past this, it is Inf */
+                sticky |= digit != 0;
+            }
+        }
+        number = ldexp((double)(head | (uint64_t)sticky), shift);
+        if (negative) number = -number;
+    }
+    return basta_value_number_fmt(number, fmt);
+}
+
 static BastaValue *parse_number_literal
 (
     Parser *parser
@@ -127,15 +174,19 @@ static BastaValue *parse_number_literal
     }
     uint64_t magnitude = 0;
     uint64_t limit = negative ? (UINT64_C(1) << 63) : UINT64_MAX;
+    size_t first = at;
     for (; at < len; at++)
     {
         unsigned char c = (unsigned char)start[at];
         unsigned digit = c >= '0' && c <= '9' ? c - '0' : c >= 'a' && c <= 'f' ? c - 'a' + 10 : c - 'A' + 10;
-        if (digit >= (unsigned)base || magnitude > (limit - digit) / (unsigned)base)
+        if (digit >= (unsigned)base)
         {
-            parser_error_code(parser, BASTA_ERR_NUMBER_RANGE, "integer literal outside signed/unsigned 64-bit range");
+            /* The lexer only emits well-formed numbers; this is a guard. */
+            parser_error_code(parser, BASTA_ERR_SYNTAX, "invalid digit in number");
             return NULL;
         }
+        if (magnitude > (limit - digit) / (unsigned)base)
+            return parse_wide_integer(parser, start, len, first, base, fmt, negative);
         magnitude = magnitude * (unsigned)base + digit;
     }
     if (negative)

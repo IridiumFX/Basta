@@ -602,15 +602,18 @@ Integer literals without a decimal point or exponent are stored exactly, includi
 decimal, hexadecimal and binary spellings. Negative values must fit `int64_t`;
 nonnegative values may use the full `uint64_t` range. Parsed nonnegative values
 up to `INT64_MAX` use the signed representation; larger ones use unsigned.
-`BASTA_NUMBER` remains the value type. All existing value/error enum codes stay
-unchanged; the new `BASTA_ERR_NUMBER_RANGE` is appended.
+`BASTA_NUMBER` remains the value type, and all existing value/error enum codes
+are unchanged.
 
-The parser rejects an out-of-range integer rather than rounding it or wrapping.
-For example, `18446744073709551615` is exact, while `18446744073709551616` reports
-`BASTA_ERR_NUMBER_RANGE`. An explicit decimal point or exponent, such as
-`18446744073709551616.0` or `1e30`, requests the existing floating-point behavior.
-This is the C implementation's range policy; it does not remove integer syntax
-from the format grammar or impose a token-length ceiling. Inf/NaN and existing
+An integer literal beyond that range is still a valid number by the grammar, so
+it is read, never rejected and never wrapped: it becomes the nearest double, of
+kind `BASTA_NUMBER_FLOAT`. The kind is the exactness flag. `18446744073709551615`
+is exact (`BASTA_NUMBER_UINT64`); `18446744073709551616` is approximate
+(`BASTA_NUMBER_FLOAT`), so `basta_get_uint64` refuses it rather than return a
+rounded value, while `basta_get_number` returns 2^64 as it always has. A writer
+emits such a value in its shortest floating spelling (`1.8446744073709552e+19`),
+not the original digits. An explicit decimal point or exponent, such as
+`18446744073709551616.0` or `1e30`, is floating point from the start. Inf/NaN and existing
 floating-point APIs remain available. A decimal integer `-0` has integer value0.
 
 ```c

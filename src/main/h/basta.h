@@ -65,8 +65,7 @@ typedef enum {
     BASTA_ERR_SYNTAX,
     BASTA_ERR_UNEXPECTED_TOKEN,
     BASTA_ERR_UNEXPECTED_EOF,
-    BASTA_ERR_BLOB_TRUNCATED,   /* sentinel found but size/data bytes missing */
-    BASTA_ERR_NUMBER_RANGE
+    BASTA_ERR_BLOB_TRUNCATED    /* sentinel found but size/data bytes missing */
 } BastaError;
 
 /* Error info */

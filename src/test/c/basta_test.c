@@ -1795,17 +1795,32 @@ static void test_exact_integers(void)
         else INTEGER_ASSERT(!basta_get_uint64(back_number, &unsigned_value) && unsigned_value == cases[i].magnitude, "unsigned round trip exact");
         free(wire); basta_free(back); basta_free(value);
     }
-    static const char *overflow[] = {
-        "18446744073709551616", "-9223372036854775809", "0x10000000000000000",
-        "-0x8000000000000001", "-0xffffffffffffffff",
-        "0b10000000000000000000000000000000000000000000000000000000000000000",
-        "999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999"
+    /* Past the 64-bit range an integer literal is still valid by the grammar:
+       it reads as the nearest double, kind FLOAT, which both checked getters
+       refuse -- so no consumer asking for an exact value receives a rounded one. */
+    static const struct { const char *literal; double expected; } wide[] = {
+        { "18446744073709551616", 18446744073709551616.0 },
+        { "-9223372036854775809", -9223372036854775808.0 },
+        { "0x10000000000000000", 18446744073709551616.0 },
+        { "-0x8000000000000001", -9223372036854775808.0 },
+        { "-0xffffffffffffffff", -18446744073709551616.0 },
+        { "0b10000000000000000000000000000000000000000000000000000000000000000", 18446744073709551616.0 },
+        /* 2^64 + 2^11 + 1: just past a rounding tie.  The dropped low bit must
+           still round it up; without the sticky bit it would read as 2^64. */
+        { "0x10000000000000801", 18446744073709555712.0 },
+        { "999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999", 1e90 }
     };
-    for (size_t i = 0; i < sizeof(overflow) / sizeof(overflow[0]); i++)
+    for (size_t i = 0; i < sizeof(wide) / sizeof(wide[0]); i++)
     {
-        char input[160]; snprintf(input, sizeof(input), "{n:%s}", overflow[i]);
+        char input[160]; snprintf(input, sizeof(input), "{n:%s}", wide[i].literal);
         BastaResult result = { 0 }; BastaValue *value = basta_parse_cstr(input, &result);
-        INTEGER_ASSERT(!value && result.code == BASTA_ERR_NUMBER_RANGE, "integer overflow refuses instead of rounding/wrapping");
+        const BastaValue *number = basta_map_get(value, "n");
+        int64_t s = 41; uint64_t u = 43;
+        INTEGER_ASSERT(value && result.code == BASTA_OK, "wide integer parses: it is grammar-valid");
+        INTEGER_ASSERT(basta_get_number_kind(number) == BASTA_NUMBER_FLOAT, "wide integer is approximate (FLOAT kind)");
+        INTEGER_ASSERT(basta_get_number(number) == wide[i].expected, "wide integer is the nearest double");
+        INTEGER_ASSERT(basta_get_int64(number, &s) == -1 && s == 41 && basta_get_uint64(number, &u) == -1 && u == 43,
+               "exact getters refuse an approximate value, output untouched");
         basta_free(value);
     }
     uint64_t random = UINT64_C(0x49de63a4b7c2851f);
