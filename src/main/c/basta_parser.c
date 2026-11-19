@@ -146,41 +146,49 @@ static BastaValue *parse_wide_integer(Parser *parser, const char *start,
     return basta_value_number_fmt(number, fmt);
 }
 
-static BastaValue *parse_number_literal
-(
-    Parser *parser
-)
-{
+static BastaValue *parse_number_literal(Parser *parser) {
     const char *start = parser->current.start;
     size_t len = parser->current.len, at = start[0] == '-' ? 1 : 0;
     int negative = at != 0, base = 10;
     uint8_t fmt = BASTA_NUM_DEC;
-    if (len - at >= 3 && start[at] == '0')
-    {
-        if (start[at + 1] == 'x' || start[at + 1] == 'X') { base = 16; fmt = BASTA_NUM_HEX; at += 2; }
-        else if (start[at + 1] == 'b' || start[at + 1] == 'B') { base = 2; fmt = BASTA_NUM_BIN; at += 2; }
+
+    if (len - at >= 3 && start[at] == '0') {
+        if (start[at + 1] == 'x' || start[at + 1] == 'X') {
+            base = 16; fmt = BASTA_NUM_HEX; at += 2;
+        } else if (start[at + 1] == 'b' || start[at + 1] == 'B') {
+            base = 2; fmt = BASTA_NUM_BIN; at += 2;
+        }
     }
+
     if (base == 10 && (start[at] == 'I' || start[at] == 'N'
-        || memchr(start, '.', len) || memchr(start, 'e', len) || memchr(start, 'E', len)))
-    {
+                       || memchr(start, '.', len) || memchr(start, 'e', len)
+                       || memchr(start, 'E', len))) {
         /* Float tokens have no fixed text-length ceiling or silent truncation. */
-        if (len == SIZE_MAX) { parser_error_code(parser, BASTA_ERR_ALLOC, "number allocation overflow"); return NULL; }
+        if (len == SIZE_MAX) {
+            parser_error_code(parser, BASTA_ERR_ALLOC, "number allocation overflow");
+            return NULL;
+        }
         char *text = (char *)malloc(len + 1);
-        if (!text) { parser_error_code(parser, BASTA_ERR_ALLOC, "allocation failed"); return NULL; }
-        memcpy(text, start, len); text[len] = 0;
+        if (!text) {
+            parser_error_code(parser, BASTA_ERR_ALLOC, "allocation failed");
+            return NULL;
+        }
+        memcpy(text, start, len);
+        text[len] = 0;
         double number = strtod(text, NULL);
         free(text);
         return basta_value_number_fmt(number, fmt);
     }
+
     uint64_t magnitude = 0;
     uint64_t limit = negative ? (UINT64_C(1) << 63) : UINT64_MAX;
     size_t first = at;
-    for (; at < len; at++)
-    {
+    for (; at < len; at++) {
         unsigned char c = (unsigned char)start[at];
-        unsigned digit = c >= '0' && c <= '9' ? c - '0' : c >= 'a' && c <= 'f' ? c - 'a' + 10 : c - 'A' + 10;
-        if (digit >= (unsigned)base)
-        {
+        unsigned digit = c >= '0' && c <= '9' ? c - '0'
+                       : c >= 'a' && c <= 'f' ? c - 'a' + 10
+                       : c - 'A' + 10;
+        if (digit >= (unsigned)base) {
             /* The lexer only emits well-formed numbers; this is a guard. */
             parser_error_code(parser, BASTA_ERR_SYNTAX, "invalid digit in number");
             return NULL;
@@ -189,12 +197,15 @@ static BastaValue *parse_number_literal
             return parse_wide_integer(parser, start, len, first, base, fmt, negative);
         magnitude = magnitude * (unsigned)base + digit;
     }
-    if (negative)
-    {
-        int64_t integer = magnitude == (UINT64_C(1) << 63) ? INT64_MIN : -(int64_t)magnitude;
+
+    if (negative) {
+        int64_t integer = magnitude == (UINT64_C(1) << 63)
+                        ? INT64_MIN : -(int64_t)magnitude;
         return basta_new_int64_fmt(integer, fmt);
     }
-    return magnitude <= INT64_MAX ? basta_new_int64_fmt((int64_t)magnitude, fmt) : basta_new_uint64_fmt(magnitude, fmt);
+    return magnitude <= INT64_MAX
+         ? basta_new_int64_fmt((int64_t)magnitude, fmt)
+         : basta_new_uint64_fmt(magnitude, fmt);
 }
 
 static BastaValue *extract_string(const char *start, size_t len) {
@@ -323,7 +334,11 @@ static BastaValue *parse_value(Parser *p) {
         }
         case TOK_NUMBER: {
             BastaValue *v = parse_number_literal(p);
-            if (!v) { if (!p->had_error) parser_error_code(p, BASTA_ERR_ALLOC, "allocation failed"); return NULL; }
+            if (!v) {
+                if (!p->had_error)
+                    parser_error_code(p, BASTA_ERR_ALLOC, "allocation failed");
+                return NULL;
+            }
             advance(p);
             return v;
         }

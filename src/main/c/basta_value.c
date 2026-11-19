@@ -116,28 +116,30 @@ BASTA_API BastaValue *basta_new_number(double n) { return basta_value_number(n);
 BASTA_API BastaValue *basta_new_number_fmt(double n, int fmt) {
     return basta_value_number_fmt(n, (uint8_t)fmt);
 }
-BASTA_API BastaValue *basta_new_int64_fmt
-(
-    int64_t n
-    , int fmt
-)
-{
+BASTA_API BastaValue *basta_new_int64_fmt(int64_t n, int fmt) {
     BastaValue *v = alloc_value(BASTA_NUMBER);
-    if (v) { v->num_kind = BASTA_NUMBER_INT64; v->as.integer = n; v->num_fmt = (uint8_t)fmt; }
+    if (v) {
+        v->num_kind   = BASTA_NUMBER_INT64;
+        v->as.integer = n;
+        v->num_fmt    = (uint8_t)fmt;
+    }
     return v;
 }
-BASTA_API BastaValue *basta_new_uint64_fmt
-(
-    uint64_t n
-    , int fmt
-)
-{
+BASTA_API BastaValue *basta_new_uint64_fmt(uint64_t n, int fmt) {
     BastaValue *v = alloc_value(BASTA_NUMBER);
-    if (v) { v->num_kind = BASTA_NUMBER_UINT64; v->as.unsigned_integer = n; v->num_fmt = (uint8_t)fmt; }
+    if (v) {
+        v->num_kind            = BASTA_NUMBER_UINT64;
+        v->as.unsigned_integer = n;
+        v->num_fmt             = (uint8_t)fmt;
+    }
     return v;
 }
-BASTA_API BastaValue *basta_new_int64(int64_t n) { return basta_new_int64_fmt(n, BASTA_NUM_DEC); }
-BASTA_API BastaValue *basta_new_uint64(uint64_t n) { return basta_new_uint64_fmt(n, BASTA_NUM_DEC); }
+BASTA_API BastaValue *basta_new_int64(int64_t n) {
+    return basta_new_int64_fmt(n, BASTA_NUM_DEC);
+}
+BASTA_API BastaValue *basta_new_uint64(uint64_t n) {
+    return basta_new_uint64_fmt(n, BASTA_NUM_DEC);
+}
 
 BASTA_API BastaValue *basta_new_string(const char *s) {
     return basta_value_string(s, s ? strlen(s) : 0);
@@ -223,35 +225,34 @@ BASTA_API double basta_get_number(const BastaValue *v) {
     return v->as.number;
 }
 
-BASTA_API BastaNumberKind basta_get_number_kind
-(
-    const BastaValue *v
-)
-{
-    return v && v->type == BASTA_NUMBER ? (BastaNumberKind)v->num_kind : BASTA_NUMBER_NONE;
+BASTA_API BastaNumberKind basta_get_number_kind(const BastaValue *v) {
+    return v && v->type == BASTA_NUMBER ? (BastaNumberKind)v->num_kind
+                                        : BASTA_NUMBER_NONE;
 }
-BASTA_API int basta_get_int64
-(
-    const BastaValue *v
-    , int64_t *out
-)
-{
+
+BASTA_API int basta_get_int64(const BastaValue *v, int64_t *out) {
     if (!out || !v || v->type != BASTA_NUMBER) return -1;
-    if (v->num_kind == BASTA_NUMBER_INT64) { *out = v->as.integer; return 0; }
-    if (v->num_kind == BASTA_NUMBER_UINT64 && v->as.unsigned_integer <= INT64_MAX)
-    { *out = (int64_t)v->as.unsigned_integer; return 0; }
+    if (v->num_kind == BASTA_NUMBER_INT64) {
+        *out = v->as.integer;
+        return 0;
+    }
+    if (v->num_kind == BASTA_NUMBER_UINT64 && v->as.unsigned_integer <= INT64_MAX) {
+        *out = (int64_t)v->as.unsigned_integer;
+        return 0;
+    }
     return -1;
 }
-BASTA_API int basta_get_uint64
-(
-    const BastaValue *v
-    , uint64_t *out
-)
-{
+
+BASTA_API int basta_get_uint64(const BastaValue *v, uint64_t *out) {
     if (!out || !v || v->type != BASTA_NUMBER) return -1;
-    if (v->num_kind == BASTA_NUMBER_UINT64) { *out = v->as.unsigned_integer; return 0; }
-    if (v->num_kind == BASTA_NUMBER_INT64 && v->as.integer >= 0)
-    { *out = (uint64_t)v->as.integer; return 0; }
+    if (v->num_kind == BASTA_NUMBER_UINT64) {
+        *out = v->as.unsigned_integer;
+        return 0;
+    }
+    if (v->num_kind == BASTA_NUMBER_INT64 && v->as.integer >= 0) {
+        *out = (uint64_t)v->as.integer;
+        return 0;
+    }
     return -1;
 }
 

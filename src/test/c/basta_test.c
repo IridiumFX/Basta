@@ -1738,11 +1738,9 @@ static void test_multiline_quote_runs(void) {
 
 /* Exact integers stay NUMBER values, with additive checked accessors. The
    legacy double getter remains intentionally converting for old consumers. */
-static void test_exact_integers(void)
-{
+static void test_exact_integers(void) {
     SECTION("Exact signed/unsigned 64-bit numbers");
-    static const struct
-    {
+    static const struct {
         const char *literal;
         uint64_t magnitude;
         int negative, fmt;
@@ -1761,8 +1759,7 @@ static void test_exact_integers(void)
         { "0b1111111111111111111111111111111111111111111111111111111111111111", UINT64_MAX, 0, BASTA_NUM_BIN },
         { "-0b1000000000000000000000000000000000000000000000000000000000000000", UINT64_C(1) << 63, 1, BASTA_NUM_BIN }
     };
-    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++)
-    {
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
         char input[128]; snprintf(input, sizeof(input), "{n:%s}", cases[i].literal);
         BastaResult result = { 0 };
         BastaValue *value = basta_parse_cstr(input, &result);
@@ -1773,14 +1770,11 @@ static void test_exact_integers(void)
         INTEGER_ASSERT(basta_get_number_fmt(number) == cases[i].fmt, "integer base retained");
         int64_t signed_value = 19; uint64_t unsigned_value = 23;
         int64_t expected = cases[i].negative ? (cases[i].magnitude == (UINT64_C(1) << 63) ? INT64_MIN : -(int64_t)cases[i].magnitude) : 0;
-        if (cases[i].negative)
-        {
+        if (cases[i].negative) {
             INTEGER_ASSERT(basta_get_number_kind(number) == BASTA_NUMBER_INT64, "negative integer kind");
             INTEGER_ASSERT(!basta_get_int64(number, &signed_value) && signed_value == expected, "negative exact value");
             INTEGER_ASSERT(basta_get_uint64(number, &unsigned_value) == -1 && unsigned_value == 23, "negative to unsigned refuses untouched");
-        }
-        else
-        {
+        } else {
             INTEGER_ASSERT(basta_get_number_kind(number) == (cases[i].magnitude <= INT64_MAX ? BASTA_NUMBER_INT64 : BASTA_NUMBER_UINT64), "positive integer kind");
             INTEGER_ASSERT(!basta_get_uint64(number, &unsigned_value) && unsigned_value == cases[i].magnitude, "unsigned exact value");
             if (cases[i].magnitude <= INT64_MAX) INTEGER_ASSERT(!basta_get_int64(number, &signed_value) && signed_value == (int64_t)cases[i].magnitude, "positive exact signed view");
@@ -1810,8 +1804,7 @@ static void test_exact_integers(void)
         { "0x10000000000000801", 18446744073709555712.0 },
         { "999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999", 1e90 }
     };
-    for (size_t i = 0; i < sizeof(wide) / sizeof(wide[0]); i++)
-    {
+    for (size_t i = 0; i < sizeof(wide) / sizeof(wide[0]); i++) {
         char input[160]; snprintf(input, sizeof(input), "{n:%s}", wide[i].literal);
         BastaResult result = { 0 }; BastaValue *value = basta_parse_cstr(input, &result);
         const BastaValue *number = basta_map_get(value, "n");
@@ -1824,8 +1817,7 @@ static void test_exact_integers(void)
         basta_free(value);
     }
     uint64_t random = UINT64_C(0x49de63a4b7c2851f);
-    for (int i = 0; i < 256; i++)
-    {
+    for (int i = 0; i < 256; i++) {
         random ^= random << 13; random ^= random >> 7; random ^= random << 17;
         int fmt = i % 3; BastaResult result = { 0 };
         BastaValue *value = basta_new_map();
